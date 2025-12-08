@@ -3,17 +3,24 @@ setlocal
 
 cd /d "%~dp0"
 
-set "REQUIRED_PYTHON_VERSION=3.12"
+set "MINIMUM_PYTHON_VERSION=3.12"
 set "APP_URL=http://localhost:8551/app"
 
+for /f "tokens=1,2 delims=." %%a in ("%MINIMUM_PYTHON_VERSION%") do (
+    set "REQUIRED_MAJOR=%%a"
+    set "REQUIRED_MINOR=%%b"
+)
+
 set "PYTHON_CMD="
-for %%P in ("py -3.12" python3.12 python3 python) do (
+set "PYTHON_EXE="
+for %%P in ("py -3" python3 python) do (
     call :check_python %%~P
     if defined PYTHON_CMD goto :have_python
 )
-echo Python %REQUIRED_PYTHON_VERSION% was not found. Please install Python %REQUIRED_PYTHON_VERSION% and rerun this script.
+echo Python %MINIMUM_PYTHON_VERSION% or newer was not found. Please install Python %MINIMUM_PYTHON_VERSION% or later and rerun this script.
 exit /b 1
 :have_python
+if not defined PYTHON_EXE set "PYTHON_EXE=%PYTHON_CMD%"
 
 set "PIP="
 %PYTHON_CMD% -m pip --version >nul 2>nul
@@ -42,8 +49,8 @@ if errorlevel 1 (
     )
 )
 
-echo Installing project dependencies via pipenv (Python %REQUIRED_PYTHON_VERSION%)...
-pipenv --python %REQUIRED_PYTHON_VERSION% install
+echo Installing project dependencies via pipenv (Python %MINIMUM_PYTHON_VERSION%+)...
+pipenv --python "%PYTHON_EXE%" install
 if errorlevel 1 exit /b %errorlevel%
 
 pipenv --venv >nul 2>nul
@@ -66,9 +73,26 @@ set "CAND=%*"
 set "RAW_VER="
 for /f "usebackq tokens=2 delims= " %%v in (`%CAND% -V 2^>nul`) do set "RAW_VER=%%v"
 if not defined RAW_VER goto :eof
+set "MAJOR="
+set "MINOR="
 for /f "tokens=1,2 delims=." %%a in ("%RAW_VER%") do (
-    if "%%a.%%b"=="%REQUIRED_PYTHON_VERSION%" (
-        set "PYTHON_CMD=%CAND%"
-    )
+    set "MAJOR=%%a"
+    set "MINOR=%%b"
+)
+if not defined MAJOR goto :eof
+if not defined MINOR goto :eof
+set /a MAJOR_INT=%MAJOR% >nul 2>nul
+if errorlevel 1 goto :eof
+set /a MINOR_INT=%MINOR% >nul 2>nul
+if errorlevel 1 goto :eof
+
+if %MAJOR_INT% GTR %REQUIRED_MAJOR% goto :set_python
+if %MAJOR_INT% EQU %REQUIRED_MAJOR% if %MINOR_INT% GEQ %REQUIRED_MINOR% goto :set_python
+goto :eof
+
+:set_python
+set "PYTHON_CMD=%CAND%"
+if not defined PYTHON_EXE (
+    for /f "usebackq delims=" %%p in (`%CAND% -c "import sys;print(sys.executable)" 2^>nul`) do set "PYTHON_EXE=%%p"
 )
 goto :eof
