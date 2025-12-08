@@ -11,7 +11,7 @@ def main() -> None:
     if not target.exists():
         raise FileNotFoundError(f"Unable to locate {target}")
 
-    result = subprocess.run([sys.executable, "-u", str(target), "--desktop"])
+    result = subprocess.run([sys.executable, "-u", str(target)])
     raise SystemExit(result.returncode)
 
 

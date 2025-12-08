@@ -5,6 +5,32 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
 REQUIRED_PYTHON_VERSION="3.12"
+APP_URL="http://localhost:8551/app"
+
+open_browser() {
+  local url="$1"
+
+  for cmd in google-chrome google-chrome-stable chromium-browser chromium chrome; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      "$cmd" "$url" >/dev/null 2>&1 &
+      return 0
+    fi
+  done
+
+  if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$url" >/dev/null 2>&1 &
+    return 0
+  fi
+
+  return 1
+}
+
+launch_browser_async() {
+  (
+    sleep 2
+    open_browser "$APP_URL" || echo "Could not automatically open $APP_URL; please open it manually."
+  ) &
+}
 
 find_python_required() {
   local cmd version
@@ -52,4 +78,6 @@ if ! pipenv --venv >/dev/null 2>&1; then
 fi
 
 echo "Starting niconavi.py inside pipenv..."
+echo "Attempting to open ${APP_URL} in your browser..."
+launch_browser_async
 pipenv run python niconavi.py

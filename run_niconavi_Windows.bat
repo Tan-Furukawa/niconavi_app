@@ -4,6 +4,7 @@ setlocal
 cd /d "%~dp0"
 
 set "REQUIRED_PYTHON_VERSION=3.12"
+set "APP_URL=http://localhost:8551/app"
 
 set "PYTHON_CMD="
 for %%P in ("py -3.12" python3.12 python3 python) do (
@@ -52,9 +53,13 @@ if errorlevel 1 (
 )
 
 echo Starting niconavi.py inside pipenv...
-pipenv run python niconavi.py
+echo Attempting to open %APP_URL% in your browser...
+start "" /b powershell -NoProfile -Command "Start-Sleep -Seconds 2; $url='%APP_URL%'; $candidates=@('chrome.exe', \"$Env:ProgramFiles\Google\Chrome\Application\chrome.exe\", \"$Env:ProgramFiles(x86)\Google\Chrome\Application\chrome.exe\", \"$Env:LocalAppData\Google\Chrome\Application\chrome.exe\"); $chrome=$candidates | Where-Object { Test-Path $_ } | Select-Object -First 1; if ($chrome) { Start-Process $chrome $url } else { Start-Process $url }" >nul 2>&1
 
-endlocal
+pipenv run python niconavi.py
+set "EXIT_CODE=%ERRORLEVEL%"
+
+endlocal & exit /b %EXIT_CODE%
 
 :check_python
 set "CAND=%*"
