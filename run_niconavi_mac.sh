@@ -48,6 +48,37 @@ version_at_least() {
   return 1
 }
 
+resolve_pipenv() {
+  local candidate user_base
+
+  if command -v pipenv >/dev/null 2>&1; then
+    candidate="$(command -v pipenv)"
+  fi
+
+  if [ -z "${candidate:-}" ]; then
+    user_base="$("$PYTHON_CMD" -m site --user-base 2>/dev/null || true)"
+    if [ -n "$user_base" ] && [ -x "$user_base/bin/pipenv" ]; then
+      candidate="$user_base/bin/pipenv"
+    fi
+  fi
+
+  if [ -z "${candidate:-}" ]; then
+    for candidate in /opt/homebrew/bin/pipenv /usr/local/bin/pipenv; do
+      if [ -x "$candidate" ]; then
+        echo "$candidate"
+        return 0
+      fi
+    done
+  fi
+
+  if [ -n "${candidate:-}" ]; then
+    echo "$candidate"
+    return 0
+  fi
+
+  return 1
+}
+
 find_python_required() {
   local cmd version
   for cmd in python3 python; do
@@ -82,7 +113,8 @@ if [ -z "$PYTHON_EXE" ]; then
 fi
 
 # mac は pipenv を Homebrew 管理にしておく前提
-if ! command -v pipenv >/dev/null 2>&1; then
+PIPENV_CMD="$(resolve_pipenv || true)"
+if [ -z "$PIPENV_CMD" ]; then
   cat <<EOF
 pipenv was not found. Please install it via Homebrew and retry:
 
@@ -93,9 +125,9 @@ EOF
 fi
 
 echo "Installing project dependencies via pipenv (Python ${MINIMUM_PYTHON_VERSION}+)..."
-pipenv --python "${PYTHON_EXE}" install
+"$PIPENV_CMD" --python "${PYTHON_EXE}" install
 
-if ! pipenv --venv >/dev/null 2>&1; then
+if ! "$PIPENV_CMD" --venv >/dev/null 2>&1; then
   echo "pipenv failed to create a virtual environment. Please check the output above."
   exit 1
 fi
@@ -103,4 +135,4 @@ fi
 echo "Starting niconavi.py inside pipenv..."
 echo "Attempting to open ${APP_URL} in your browser..."
 launch_browser_async
-pipenv run python niconavi.py
+"$PIPENV_CMD" run python niconavi.py

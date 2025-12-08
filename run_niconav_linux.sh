@@ -56,6 +56,32 @@ version_at_least() {
   return 1
 }
 
+resolve_pipenv() {
+  local candidate py_dir
+
+  if command -v pipenv >/dev/null 2>&1; then
+    candidate="$(command -v pipenv)"
+  fi
+
+  if [ -z "${candidate:-}" ] && [ -n "${USER_BASE:-}" ] && [ -x "${USER_BASE}/bin/pipenv" ]; then
+    candidate="${USER_BASE}/bin/pipenv"
+  fi
+
+  if [ -z "${candidate:-}" ] && [ -n "${PYTHON_EXE:-}" ]; then
+    py_dir="$(dirname "$PYTHON_EXE")"
+    if [ -x "${py_dir}/pipenv" ]; then
+      candidate="${py_dir}/pipenv"
+    fi
+  fi
+
+  if [ -n "${candidate:-}" ]; then
+    echo "$candidate"
+    return 0
+  fi
+
+  return 1
+}
+
 find_python_required() {
   local cmd version
   for cmd in python3 python; do
@@ -85,24 +111,33 @@ if [ -z "$PYTHON_EXE" ]; then
   exit 1
 fi
 
-if ! command -v pipenv >/dev/null 2>&1; then
+USER_BASE="$("$PYTHON_CMD" -m site --user-base 2>/dev/null || true)"
+if [ -n "$USER_BASE" ]; then
+  export PATH="$USER_BASE/bin:$PATH"
+fi
+
+PIPENV_CMD="$(resolve_pipenv || true)"
+
+if [ -z "$PIPENV_CMD" ]; then
   if "$PYTHON_CMD" -m pip --version >/dev/null 2>&1; then
     echo "pipenv not found; installing with ${PYTHON_CMD} -m pip ..."
     "$PYTHON_CMD" -m pip install --user pipenv
-    USER_BASE="$("$PYTHON_CMD" -m site --user-base 2>/dev/null || true)"
-    if [ -n "$USER_BASE" ]; then
-      export PATH="$USER_BASE/bin:$PATH"
-    fi
+    PIPENV_CMD="$(resolve_pipenv || true)"
   else
     echo "pipenv not found and pip is not available. Please install them and retry."
     exit 1
   fi
 fi
 
-echo "Installing project dependencies via pipenv (Python ${MINIMUM_PYTHON_VERSION}+)..."
-pipenv --python "${PYTHON_EXE}" install
+if [ -z "$PIPENV_CMD" ]; then
+  echo "pipenv could not be located even after installation. Please ensure pipenv is installed and on your PATH."
+  exit 1
+fi
 
-if ! pipenv --venv >/dev/null 2>&1; then
+echo "Installing project dependencies via pipenv (Python ${MINIMUM_PYTHON_VERSION}+)..."
+"$PIPENV_CMD" --python "${PYTHON_EXE}" install
+
+if ! "$PIPENV_CMD" --venv >/dev/null 2>&1; then
   echo "pipenv failed to create a virtual environment. Please check the output above."
   exit 1
 fi
@@ -110,4 +145,4 @@ fi
 echo "Starting niconavi.py inside pipenv..."
 echo "Attempting to open ${APP_URL} in your browser..."
 launch_browser_async
-pipenv run python niconavi.py
+"$PIPENV_CMD" run python niconavi.py

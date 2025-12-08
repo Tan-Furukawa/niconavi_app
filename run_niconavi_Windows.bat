@@ -22,6 +22,9 @@ exit /b 1
 :have_python
 if not defined PYTHON_EXE set "PYTHON_EXE=%PYTHON_CMD%"
 
+for /f "delims=" %%i in ('%PYTHON_CMD% -c "import site;print(site.USER_BASE)" 2^>nul') do set "USER_BASE=%%i"
+for /f "delims=" %%i in ('%PYTHON_CMD% -c "import os,sys;print(os.path.dirname(sys.executable))" 2^>nul') do set "PYTHON_DIR=%%i"
+
 set "PIP="
 %PYTHON_CMD% -m pip --version >nul 2>nul
 if not errorlevel 1 (
@@ -39,21 +42,27 @@ echo pip was not found. Please install pip (the Python package manager) and reru
 exit /b 1
 :have_pip
 
-where pipenv >nul 2>nul
-if errorlevel 1 (
+set "PIPENV_CMD="
+call :resolve_pipenv
+if not defined PIPENV_CMD (
     echo pipenv not found; installing with %PIP%...
     %PIP% install --user pipenv
-    for /f "delims=" %%i in ('%PYTHON_CMD% -c "import site;print(site.USER_BASE)"') do set "USER_BASE=%%i"
+    if not defined USER_BASE for /f "delims=" %%i in ('%PYTHON_CMD% -c "import site;print(site.USER_BASE)" 2^>nul') do set "USER_BASE=%%i"
     if defined USER_BASE (
         set "PATH=%USER_BASE%\Scripts;%USER_BASE%\bin;%PATH%"
     )
+    call :resolve_pipenv
+)
+if not defined PIPENV_CMD (
+    echo pipenv could not be located even after installation. Please ensure pipenv is installed and on PATH.
+    exit /b 1
 )
 
 echo Installing project dependencies via pipenv (Python %MINIMUM_PYTHON_VERSION%+)...
-pipenv --python "%PYTHON_EXE%" install
+"%PIPENV_CMD%" --python "%PYTHON_EXE%" install
 if errorlevel 1 exit /b %errorlevel%
 
-pipenv --venv >nul 2>nul
+"%PIPENV_CMD%" --venv >nul 2>nul
 if errorlevel 1 (
 echo pipenv failed to create a virtual environment. Please check the output above.
     exit /b 1
@@ -63,10 +72,28 @@ echo Starting niconavi.py inside pipenv...
 echo Attempting to open %APP_URL% in your browser...
 start "" /b powershell -NoProfile -Command "Start-Sleep -Seconds 2; $url='%APP_URL%'; $msg='Google Chrome was not found; please open %APP_URL% in your browser (clickable).'; $candidates=@('chrome.exe', \"$Env:ProgramFiles\Google\Chrome\Application\chrome.exe\", \"$Env:ProgramFiles(x86)\Google\Chrome\Application\chrome.exe\", \"$Env:LocalAppData\Google\Chrome\Application\chrome.exe\"); $chrome=$candidates | Where-Object { Test-Path $_ } | Select-Object -First 1; if ($chrome) { try { Start-Process $chrome $url } catch { Write-Host $msg; Start-Process $url } } else { Write-Host $msg; Start-Process $url }"
 
-pipenv run python niconavi.py
+"%PIPENV_CMD%" run python niconavi.py
 set "EXIT_CODE=%ERRORLEVEL%"
 
 endlocal & exit /b %EXIT_CODE%
+
+:resolve_pipenv
+if defined PIPENV_CMD goto :eof
+for /f "delims=" %%i in ('where pipenv 2^>nul') do (
+    set "PIPENV_CMD=%%i"
+    goto :eof
+)
+if defined USER_BASE (
+    if exist "%USER_BASE%\Scripts\pipenv.exe" set "PIPENV_CMD=%USER_BASE%\Scripts\pipenv.exe" & goto :eof
+    if exist "%USER_BASE%\Scripts\pipenv.cmd" set "PIPENV_CMD=%USER_BASE%\Scripts\pipenv.cmd" & goto :eof
+    if exist "%USER_BASE%\Scripts\pipenv.bat" set "PIPENV_CMD=%USER_BASE%\Scripts\pipenv.bat" & goto :eof
+    if exist "%USER_BASE%\bin\pipenv" set "PIPENV_CMD=%USER_BASE%\bin\pipenv" & goto :eof
+)
+if defined PYTHON_DIR (
+    if exist "%PYTHON_DIR%\Scripts\pipenv.exe" set "PIPENV_CMD=%PYTHON_DIR%\Scripts\pipenv.exe" & goto :eof
+    if exist "%PYTHON_DIR%\Scripts\pipenv.cmd" set "PIPENV_CMD=%PYTHON_DIR%\Scripts\pipenv.cmd" & goto :eof
+)
+goto :eof
 
 :check_python
 set "CAND=%*"
