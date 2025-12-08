@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
-MINIMUM_PYTHON_VERSION="3.12"
 APP_URL="http://localhost:8551/app"
 
 open_browser() {
@@ -22,6 +21,7 @@ open_browser() {
     return 1
   fi
 
+  echo "Google Chrome was not available; please open ${url} in your browser (clickable)."
   return 2
 }
 
@@ -29,120 +29,22 @@ launch_browser_async() {
   (
     sleep 2
     open_browser "$APP_URL"
-    status=$?
-    if [ "$status" -ne 0 ]; then
-      echo "Google Chrome was not available; please open ${APP_URL} in your browser (clickable)."
-    fi
   ) &
 }
 
-version_at_least() {
-  local candidate="$1" required="$2"
-  local cand_major="${candidate%%.*}"
-  local cand_minor="${candidate#*.}"
-  cand_minor="${cand_minor%%.*}"
-  local req_major="${required%%.*}"
-  local req_minor="${required#*.}"
-  req_minor="${req_minor%%.*}"
+if ! command -v uv >/dev/null 2>&1; then
+  cat <<'EOF_MISSING_UV'
+uv was not found on PATH. Please install it first, for example:
 
-  if [ "$cand_major" -gt "$req_major" ]; then
-    return 0
-  fi
-
-  if [ "$cand_major" -eq "$req_major" ] && [ "$cand_minor" -ge "$req_minor" ]; then
-    return 0
-  fi
-
-  return 1
-}
-
-resolve_pipenv() {
-  local candidate py_dir
-
-  if command -v pipenv >/dev/null 2>&1; then
-    candidate="$(command -v pipenv)"
-  fi
-
-  if [ -z "${candidate:-}" ] && [ -n "${USER_BASE:-}" ] && [ -x "${USER_BASE}/bin/pipenv" ]; then
-    candidate="${USER_BASE}/bin/pipenv"
-  fi
-
-  if [ -z "${candidate:-}" ] && [ -n "${PYTHON_EXE:-}" ]; then
-    py_dir="$(dirname "$PYTHON_EXE")"
-    if [ -x "${py_dir}/pipenv" ]; then
-      candidate="${py_dir}/pipenv"
-    fi
-  fi
-
-  if [ -n "${candidate:-}" ]; then
-    echo "$candidate"
-    return 0
-  fi
-
-  return 1
-}
-
-find_python_required() {
-  local cmd version
-  for cmd in python3 python; do
-    if command -v "$cmd" >/dev/null 2>&1; then
-      version="$("$cmd" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || true)"
-      if [ -n "$version" ] && version_at_least "$version" "$MINIMUM_PYTHON_VERSION"; then
-        echo "$cmd"
-        return 0
-      fi
-    fi
-  done
-  return 1
-}
-
-PYTHON_CMD="$(find_python_required || true)"
-if [ -z "$PYTHON_CMD" ]; then
-  cat <<EOF
-Python ${MINIMUM_PYTHON_VERSION}+ is required but was not found.
-Please install Python ${MINIMUM_PYTHON_VERSION} or newer and ensure it is on your PATH, then retry.
-EOF
+  curl -Ls https://astral.sh/uv/install.sh | sh
+EOF_MISSING_UV
   exit 1
 fi
 
-PYTHON_EXE="$("$PYTHON_CMD" -c 'import sys; print(sys.executable)' 2>/dev/null || true)"
-if [ -z "$PYTHON_EXE" ]; then
-  echo "Could not determine Python executable path for ${PYTHON_CMD}."
-  exit 1
-fi
+echo "Syncing dependencies with uv (Python 3.12+)..."
+uv sync
 
-USER_BASE="$("$PYTHON_CMD" -m site --user-base 2>/dev/null || true)"
-if [ -n "$USER_BASE" ]; then
-  export PATH="$USER_BASE/bin:$PATH"
-fi
-
-PIPENV_CMD="$(resolve_pipenv || true)"
-
-if [ -z "$PIPENV_CMD" ]; then
-  if "$PYTHON_CMD" -m pip --version >/dev/null 2>&1; then
-    echo "pipenv not found; installing with ${PYTHON_CMD} -m pip ..."
-    "$PYTHON_CMD" -m pip install --user pipenv
-    PIPENV_CMD="$(resolve_pipenv || true)"
-  else
-    echo "pipenv not found and pip is not available. Please install them and retry."
-    exit 1
-  fi
-fi
-
-if [ -z "$PIPENV_CMD" ]; then
-  echo "pipenv could not be located even after installation. Please ensure pipenv is installed and on your PATH."
-  exit 1
-fi
-
-echo "Installing project dependencies via pipenv (Python ${MINIMUM_PYTHON_VERSION}+)..."
-"$PIPENV_CMD" --python "${PYTHON_EXE}" install
-
-if ! "$PIPENV_CMD" --venv >/dev/null 2>&1; then
-  echo "pipenv failed to create a virtual environment. Please check the output above."
-  exit 1
-fi
-
-echo "Starting niconavi.py inside pipenv..."
-echo "Attempting to open ${APP_URL} in your browser..."
+echo "Starting niconavi.py via uv..."
+echo "Attempting to open ${APP_URL} in Google Chrome..."
 launch_browser_async
-"$PIPENV_CMD" run python niconavi.py
+uv run python niconavi.py
