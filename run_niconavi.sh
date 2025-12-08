@@ -6,7 +6,17 @@ cd "$ROOT_DIR"
 
 REQUIRED_PYTHON_VERSION="3.12"
 
-find_python_312() {
+OS_NAME="$(uname -s)"
+case "$OS_NAME" in
+  Darwin) IS_DARWIN=true ;;
+  Linux) IS_DARWIN=false ;;
+  *)
+    echo "Unsupported OS: ${OS_NAME}. This script supports macOS and Linux."
+    exit 1
+    ;;
+esac
+
+find_python_required() {
   local cmd version
   for cmd in python3.12 python3 python; do
     if command -v "$cmd" >/dev/null 2>&1; then
@@ -20,7 +30,7 @@ find_python_312() {
   return 1
 }
 
-PYTHON_CMD="$(find_python_312 || true)"
+PYTHON_CMD="$(find_python_required || true)"
 if [ -z "$PYTHON_CMD" ]; then
   cat <<EOF
 Python ${REQUIRED_PYTHON_VERSION} is required but was not found.
@@ -29,18 +39,26 @@ EOF
   exit 1
 fi
 
-if "$PYTHON_CMD" -m pip --version >/dev/null 2>&1; then
-  PIP_CMD=("$PYTHON_CMD" -m pip)
-elif command -v pip3 >/dev/null 2>&1; then
-  PIP_CMD=("pip3")
-elif command -v pip >/dev/null 2>&1; then
-  PIP_CMD=("pip")
-else
-  echo "pip was not found. Please install pip (the Python package manager) and rerun this script."
-  exit 1
-fi
-
 if ! command -v pipenv >/dev/null 2>&1; then
+  if $IS_DARWIN; then
+    cat <<EOF
+pipenv was not found. Please install it via Homebrew and retry:
+  brew install pipenv
+EOF
+    exit 1
+  fi
+
+  if "$PYTHON_CMD" -m pip --version >/dev/null 2>&1; then
+    PIP_CMD=("$PYTHON_CMD" -m pip)
+  elif command -v pip3 >/dev/null 2>&1; then
+    PIP_CMD=("pip3")
+  elif command -v pip >/dev/null 2>&1; then
+    PIP_CMD=("pip")
+  else
+    echo "pip was not found. Please install pip (the Python package manager) and rerun this script."
+    exit 1
+  fi
+
   echo "pipenv not found; installing with ${PIP_CMD[*]}..."
   "${PIP_CMD[@]}" install --user pipenv
   USER_BASE="$($PYTHON_CMD -m site --user-base 2>/dev/null || true)"
