@@ -17,6 +17,7 @@ numpy = "*"
 scikit-learn = "*"
 umap-learn = "*"
 flet = {extras = ["all"], version = "*"}
+flet-desktop-light = { version = "==0.28.3", markers = "sys_platform == 'linux'" }
 imageio = {extras = ["ffmpeg"], version = "*"}
 
 [dev-packages]

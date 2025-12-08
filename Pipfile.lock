@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "84ec140586649160a3ef82d7bef92549a2eccfac18cea221badf88e143a859e7"
+            "sha256": "d016bca097d76350a6cbaa5fd9e9b3852d06832dbce147a505ad2710836d8cb3"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -341,7 +341,7 @@
                 "sha256:d45647d68ce0aaf5418c938e8e02f404bbb8814ece504f7242730520c3697c47",
                 "sha256:f3dc473aae8d6cf4270e59bbb51e819068c343a49a8836cced2d17fb0359a7f5"
             ],
-            "markers": "python_version >= '3.9'",
+            "markers": "sys_platform == 'linux'",
             "version": "==0.28.3"
         },
         "flet-web": {
