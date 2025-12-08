@@ -48,13 +48,13 @@ if errorlevel 1 exit /b %errorlevel%
 
 pipenv --venv >nul 2>nul
 if errorlevel 1 (
-    echo pipenv failed to create a virtual environment. Please check the output above.
+echo pipenv failed to create a virtual environment. Please check the output above.
     exit /b 1
 )
 
 echo Starting niconavi.py inside pipenv...
 echo Attempting to open %APP_URL% in your browser...
-start "" /b powershell -NoProfile -Command "Start-Sleep -Seconds 2; $url='%APP_URL%'; $candidates=@('chrome.exe', \"$Env:ProgramFiles\Google\Chrome\Application\chrome.exe\", \"$Env:ProgramFiles(x86)\Google\Chrome\Application\chrome.exe\", \"$Env:LocalAppData\Google\Chrome\Application\chrome.exe\"); $chrome=$candidates | Where-Object { Test-Path $_ } | Select-Object -First 1; if ($chrome) { Start-Process $chrome $url } else { Start-Process $url }" >nul 2>&1
+start "" /b powershell -NoProfile -Command "Start-Sleep -Seconds 2; $url='%APP_URL%'; $msg='Google Chrome was not found; please open %APP_URL% in your browser (clickable).'; $candidates=@('chrome.exe', \"$Env:ProgramFiles\Google\Chrome\Application\chrome.exe\", \"$Env:ProgramFiles(x86)\Google\Chrome\Application\chrome.exe\", \"$Env:LocalAppData\Google\Chrome\Application\chrome.exe\"); $chrome=$candidates | Where-Object { Test-Path $_ } | Select-Object -First 1; if ($chrome) { try { Start-Process $chrome $url } catch { Write-Host $msg; Start-Process $url } } else { Write-Host $msg; Start-Process $url }"
 
 pipenv run python niconavi.py
 set "EXIT_CODE=%ERRORLEVEL%"

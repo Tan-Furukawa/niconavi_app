@@ -19,16 +19,20 @@ open_browser() {
 
   if command -v xdg-open >/dev/null 2>&1; then
     xdg-open "$url" >/dev/null 2>&1 &
-    return 0
+    return 1
   fi
 
-  return 1
+  return 2
 }
 
 launch_browser_async() {
   (
     sleep 2
-    open_browser "$APP_URL" || echo "Could not automatically open $APP_URL; please open it manually."
+    open_browser "$APP_URL"
+    status=$?
+    if [ "$status" -ne 0 ]; then
+      echo "Google Chrome was not available; please open ${APP_URL} in your browser (clickable)."
+    fi
   ) &
 }
 
