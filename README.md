@@ -1,4 +1,4 @@
-# NicoNavi v0.1.0
+# NicoNavi v0.2.1
 
 
 # niconavi_app
