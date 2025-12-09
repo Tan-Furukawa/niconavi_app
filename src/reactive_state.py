@@ -52,7 +52,7 @@ class ReactiveText(Text):
         self,
         text: StateProperty[str],
         visible: StateProperty[bool] = True,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self._text = text
@@ -78,7 +78,7 @@ class ReactiveTextField(ft.TextField):
         value: StateProperty[str],
         visible: StateProperty[bool] = True,
         read_only: StateProperty[bool] = False,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._value = value
@@ -225,7 +225,7 @@ class ReactiveCheckbox(ft.Checkbox):
         value: StateProperty[bool],
         label: StateProperty[str],
         visible: StateProperty[bool] = True,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._value = value
@@ -252,7 +252,7 @@ class ReactiveRow(ft.Row):
         self,
         controls: StateProperty[list],
         visible: StateProperty[bool] = True,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
 
@@ -277,7 +277,7 @@ class ReactiveColumn(ft.Column):
         controls: StateProperty[list],
         visible: StateProperty[bool] = True,
         scroll_offset_update: Optional[float] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self._controls = controls
@@ -304,7 +304,7 @@ class ReactiveElevatedButton(ElevatedButton):
         text: StateProperty[str],
         visible: StateProperty[bool] = True,
         bgcolor: StateProperty[Optional[str]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
 
@@ -332,7 +332,7 @@ class ReactiveProgressBar(ft.ProgressBar):
         self,
         value: StateProperty[float | None],
         visible: StateProperty[bool],
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._value = value
@@ -361,7 +361,7 @@ class ReactiveProgressRing(ProgressRing):
         self,
         value: StateProperty[float | None],
         visible: StateProperty[bool],
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._value = value
@@ -389,7 +389,8 @@ class ReactiveTabs(Tabs):
     def __init__(
         self,
         selected_index: StateProperty[int] = 0,
-        **kwargs: Any
+        visible: StateProperty[bool] = True,
+        **kwargs: Any,
         # animation_duration: Optional[int] = None,
         # on_change: Optional[Callable[[Tabs], None]] = None,
         # expand: Optional[bool] = None,
@@ -404,18 +405,19 @@ class ReactiveTabs(Tabs):
             # scrollable=scrollable,
         )
         # self.on_change = on_change
+        self._visible = visible
         self._selected_index = selected_index
         # self.on_change = lambda e: self._selected_index.update()
         self.set_props()
         bind_props(
-            [self._selected_index], lambda: self.content_update()
+            [self._selected_index, self._visible], lambda: self.content_update()
         )  # 自動でデータバインディング
 
     def set_props(self) -> None:
         self.selected_index = get_prop_value(
-            self._selected_index
+            self._selected_index,
         )  # 通常の変数かStateかを判断して値を取得
-        # self.size = get_prop_value(self.size)
+        self.visible = get_prop_value(self._visible)
 
     def content_update(self) -> None:
         self.set_props()
@@ -486,7 +488,14 @@ class ReactiveSlider(ft.Slider):
 
         self.set_props()
         bind_props(
-            [self._value, self._min, self._max, self._divisions, self._label, self._visible],
+            [
+                self._value,
+                self._min,
+                self._max,
+                self._divisions,
+                self._label,
+                self._visible,
+            ],
             lambda: self.content_update(),
         )
 

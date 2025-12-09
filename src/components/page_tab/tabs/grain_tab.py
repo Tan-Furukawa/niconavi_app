@@ -176,6 +176,8 @@ def continue_button_click(
         update_progress_bar(0.0, stores)
         update_logs(stores, ("Grain analysis completed.", "ok"))
         # save_in_ComputationResultState(res, stores)
+
+        stores.ui.progress.set(3)
         switch_tab_index(stores, 3)
 
     except Exception as e:

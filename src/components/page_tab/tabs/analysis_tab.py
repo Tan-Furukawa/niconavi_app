@@ -672,6 +672,21 @@ class AnalysisTab(ft.Container):
             accept_None=False,
         )
 
+        # one_pixel = make_reactive_float_text_filed(
+        #     stores,
+        #     stores.ui.one_pixel,
+        #     parse_larger_than_0,
+        #     accept_None=True,
+        # )
+
+        # ft.Row(
+        #     [
+        #         CustomText("1 px ="),
+        #         one_pixel,
+        #         CustomText("μm"),
+        #     ]
+        # ),
+
         content = ft.Column(
             [
                 ReactiveColumn(
@@ -710,7 +725,9 @@ class AnalysisTab(ft.Container):
                                     label="flip",
                                     value=stores.ui.analysis_tab.rose_flip,
                                     on_change=lambda e: (
-                                        stores.ui.analysis_tab.rose_flip.set(e.control.value),
+                                        stores.ui.analysis_tab.rose_flip.set(
+                                            e.control.value
+                                        ),
                                         force_update_image_view(stores),
                                     ),
                                 ),

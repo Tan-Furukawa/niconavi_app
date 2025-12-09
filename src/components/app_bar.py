@@ -9,7 +9,7 @@ from stores import (
     as_ComputationResult,
     save_in_ComputationResultState,
 )
-
+from niconavi.tools.str_parser import parse_larger_than_0
 # from components.selector.always import make_always_visible_state
 from logging import getLogger, Logger
 from reactive_state import ReactiveProgressRing, ReactiveText, ReactiveCheckbox
@@ -46,6 +46,7 @@ from components.page_tab.tabs.movie_tab import (
 
 from components.labeling_app.labeling_controller import LabelingController
 from components.common_component import (
+    make_reactive_float_text_filed,
     CustomText,
     CustomReactiveCheckbox,
 )
@@ -174,7 +175,7 @@ def make_grain_boundary_checkbox(stores: Stores) -> ReactiveCheckbox:
         stores.ui.display_grain_boundary.set(e.control.value)
 
     return CustomReactiveCheckbox(
-        label="Show grain boundaries",
+        label="Grain boundaries",
         value=stores.ui.display_grain_boundary,
         visible=checkbox_visible,
         # on_change=lambda e: stores.ui.display_grain_boundary.set(e.control.value),
@@ -411,13 +412,13 @@ class niconaviAppBar:
 
         def build_menu_items() -> list[PopupMenuItem]:
             return [
-                PopupMenuItem(text="Save project", on_click=handle_save_project),
-                PopupMenuItem(
-                    text="Load project",
-                    on_click=lambda _: file_picker_load_project_file.pick_files(
-                        allowed_extensions=["niconavi", "pkl"]
-                    ),
-                ),
+                # PopupMenuItem(text="Save project", on_click=handle_save_project),
+                # PopupMenuItem(
+                #     text="Load project",
+                #     on_click=lambda _: file_picker_load_project_file.pick_files(
+                #         allowed_extensions=["niconavi", "pkl"]
+                #     ),
+                # ),
                 PopupMenuItem(
                     text="Save image as PDF", on_click=handle_save_image_as_pdf
                 ),
@@ -428,6 +429,21 @@ class niconaviAppBar:
 
         def build_action_controls() -> list[ft.Control]:
             return [
+
+
+                ft.Row(
+                    [
+                        CustomText("1px:"),
+                        make_reactive_float_text_filed(
+                            stores,
+                            stores.ui.one_pixel,
+                            parse_larger_than_0,
+                            accept_None=True,
+                        ),
+                        CustomText("μm"),
+                    ]
+                ),
+
                 make_mask_checkbox(stores),
                 make_grain_boundary_checkbox(stores),
                 ft.VerticalDivider(),

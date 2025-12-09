@@ -48,7 +48,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 # ------------------------------------------------------------
 class Appearance:
     def __init__(self) -> None:
-        self.niconavi_version = "NicoNavi v0.2.1"
+        self.niconavi_version = "NicoNavi v0.2.2"
         self.tabs_width = 400
         self.tab_padding = 20
         self.progress_bar_height = 50
@@ -248,7 +248,7 @@ class GrainTab:
 class UI:
     def __init__(self) -> None:
         self.selected_index = State(0)
-        self.one_pixel = State(None) # Noneのとき、px表示で、それ以外のときはμm表示する。
+        self.one_pixel = State(0) # 0のとき、未定で、>0のとき、その値にする。
         self.image_button_index = State(0)
         self.progress_bar = ProgressBar()
         self.movie_tab = MovieTabObj()
@@ -273,6 +273,7 @@ class UI:
         self.computing_is_stop: State[bool] = State(True)
         self.once_start: State[bool] = State(False)
         self.displayed_fig: State[Optional[Figure]] = State(None)
+        self.progress = State(0)
 
 
 # ------------------------------------------------------------

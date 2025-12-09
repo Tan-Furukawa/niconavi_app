@@ -42,7 +42,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 # ------------------------------------------------------------
 class Appearance:
     def __init__(self) -> None:
-        self.niconavi_version = "NicoNavi v0.2.1"
+        self.niconavi_version = "NicoNavi v0.2.2"
         self.tabs_width = 400
         self.tab_padding = 20
         self.progress_bar_height = 50
@@ -267,6 +267,7 @@ class UI:
         self.computing_is_stop: State[bool] = State(True)
         self.once_start: State[bool] = State(False)
         self.displayed_fig: State[Optional[Figure]] = State(None)
+        self.progress = State(0)
 
 
 # ------------------------------------------------------------

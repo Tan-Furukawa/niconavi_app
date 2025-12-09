@@ -1,0 +1,13 @@
+NICONAVI LICENSE
+Version 1.0 (2025)
+Copyright (C) 2025, NicoNavi contributors
+
+This software is distributed free of charge for academic, scientific, educational, and noncommercial users. Users belonging to commercial enterprises may also use this software at no cost until a license for business users is established. Permission to use this software is hereby granted under the following conditions:
+
+1) Outputs (including drawings and visualizations) produced by this software may be used in any publications provided that such use is explicitly acknowledged. A suitable reference for this software is: NicoNavi, https://tan-furukawa.github.io/niconavi/.
+2) You should not redistribute any copy of the distributed files unless you have written permission from the NicoNavi contributors.
+3) Third-party components included with or referenced by this software remain under their respective licenses (including Apache-2.0, MIT, and BSD-style licenses listed in pyproject.toml). When using or redistributing those components, you must comply with their terms and retain required notices.
+
+Part of these terms may be changed without any prior announcement.
+
+This software is provided "as is" without any express or implied warranty.

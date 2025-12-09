@@ -11,7 +11,7 @@ def make_grain_classification_button_visible_state(
     selected_index: int,
 ) -> tuple[
     # ReactiveElevatedButtonInSelector,
-    ReactiveElevatedButtonInSelector,
+    # ReactiveElevatedButtonInSelector,
     ReactiveElevatedButtonInSelector,
     ReactiveElevatedButtonInSelector,
     ReactiveElevatedButtonInSelector,
@@ -105,14 +105,14 @@ def make_grain_classification_button_visible_state(
         [stores.computation_result.grain_map],
     )
 
-    grain_map_with_boundary = make_elevated_button(
-        stores,
-        "grains with boundary",
-        stores.ui.selected_button_at_grain_tab,
-        selected_index,
-        8,
-        [stores.computation_result.grain_map_with_boundary],
-    )
+    # grain_map_with_boundary = make_elevated_button(
+    #     stores,
+    #     "grains with boundary",
+    #     stores.ui.selected_button_at_grain_tab,
+    #     selected_index,
+    #     8,
+    #     [stores.computation_result.grain_map_with_boundary],
+    # )
 
     retardation = make_elevated_button(
         stores,
@@ -246,7 +246,7 @@ def make_grain_classification_button_visible_state(
         retardation,
         extinction_angle,
         grain_map,
-        grain_map_with_boundary,
+        # grain_map_with_boundary,
         p45_R_color_map,
         m45_R_color_map,
         p45_R_map,

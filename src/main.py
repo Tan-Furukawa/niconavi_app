@@ -119,11 +119,11 @@ def main(page: ft.Page) -> None:
             # scroll=True
         ),
         margin=0,
-        # margin=ft.margin.only(top=0, bottom=0),
         padding=ft.padding.only(top=0),
-        # padding=0,
         width=200,
         bgcolor=ft.Colors.BLACK12,
+        # margin=ft.margin.only(top=0, bottom=0),
+        # padding=0,
         # bgcolor="white",
         # border_radius = 0,
         # padding=ft.padding.only(left=10, right=10),

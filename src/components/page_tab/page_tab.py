@@ -45,19 +45,27 @@ class PageTabs(ft.Container):
                     label_color=ft.Colors.BLUE_100,
                     unselected_label_color=ft.Colors.WHITE,
                     tabs=[
-                        ft.Tab(
+                        ReactiveTab(
                             text="video",
                             content=MovieTab(page, stores),
                         ),
-                        ft.Tab(
+                        ReactiveTab(
                             text="center",
                             # tab_content=ft.Icon(ft.Icons.SEARCH),
                             content=CenterTab(page, stores),
                             # icon=ft.Icons.ADJUST,
+                            visible=ReactiveState(
+                                lambda: stores.ui.progress.get() >= 1,
+                                [stores.ui.progress],
+                            ),
                         ),
                         ReactiveTab(
                             text="map",
                             content=GrainTab(page, stores),
+                            visible=ReactiveState(
+                                lambda: stores.ui.progress.get() >= 2,
+                                [stores.ui.progress],
+                            ),
                             # visible=ReactiveState(
                             #     lambda: stores.computation_result.raw_maps.get() is not None,
                             #     [stores.computation_result.raw_maps],
@@ -72,6 +80,10 @@ class PageTabs(ft.Container):
                         ReactiveTab(
                             text="filter",
                             content=FilterTab(page, stores),
+                            visible=ReactiveState(
+                                lambda: stores.ui.progress.get() >= 3,
+                                [stores.ui.progress],
+                            ),
                             # icon=ft.Icons.FILTER_ALT,
                             # visible=ReactiveState(
                             #     lambda: stores.computation_result.grain_segmented_maps.get()
@@ -86,6 +98,10 @@ class PageTabs(ft.Container):
                         ReactiveTab(
                             text="analysis",
                             content=AnalysisTab(page, stores),
+                            visible=ReactiveState(
+                                lambda: stores.ui.progress.get() >= 4,
+                                [stores.ui.progress],
+                            ),
                             # visible=ReactiveState(
                             #     lambda: stores.computation_result.grain_classification_result.get()
                             #     is not None,

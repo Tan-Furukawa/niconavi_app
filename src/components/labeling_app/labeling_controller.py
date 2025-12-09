@@ -437,6 +437,7 @@ class LabelingController:
         update_progress_bar(0.0, self.stores)
         update_logs(self.stores, ("Grain analysis completed.", "ok"))
         save_in_ComputationResultState(r, self.stores)
+
         # if res.mask is not None:
         #     if res.grain_classification_code is not None:
         #         if "mask[purple]: index == 999999" not in res.grain_classification_code:
@@ -452,6 +453,7 @@ class LabelingController:
 
 
         self.stores.ui.selected_index.set(4)
+        self.stores.ui.progress.set(4)
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -91,6 +91,7 @@ def load_data_clicked(stores: Stores, *, logger: Logger) -> None:
 
             save_in_ComputationResultState(r, stores)
 
+            stores.ui.progress.set(1)
             switch_tab_index(stores, 1, logger)
 
             stores.ui.once_start.set(True)
@@ -114,12 +115,15 @@ def reset_button_click(stores: Stores, *, logger: Logger) -> None:
     r = reset_onclick_load_data(r)
     save_in_ComputationResultState(r, stores)
     stores.ui.once_start.set(False)
+    stores.ui.progress.set(0)
 
 
 def recalculate_maps_click(stores: Stores, *, logger: Logger) -> None:
 
     try:
         update_progress_bar(None, stores)
+
+        stores.ui.progress.set(1)
 
         r = as_ComputationResult(stores.computation_result)
 
@@ -166,6 +170,8 @@ def recalculate_maps_click(stores: Stores, *, logger: Logger) -> None:
         save_in_ComputationResultState(r, stores)
 
         update_progress_bar(0.0, stores)
+
+        stores.ui.progress.set(2)
         switch_tab_index(stores, 2, logger=logger)
 
     except Exception as e:
@@ -612,12 +618,6 @@ class MovieTab(ft.Container):
         #     accept_None=False,
         # )
 
-        one_pixel = make_reactive_float_text_filed(
-            stores,
-            stores.ui.one_pixel,
-            parse_larger_than_0,
-            accept_None=True,
-        )
 
 
         #! ----------------------------------------------------------
@@ -628,7 +628,7 @@ class MovieTab(ft.Container):
                 ft.Row(
                     [
                         CustomText("XPL Rotated", weight=ft.FontWeight.W_900),
-                        CustomText("*Required", italic=True, size=12),
+                        CustomText("*Required", italic=False, size=12),
                         cross_polarized_pick_files_button,
                     ]
                 ),
@@ -644,7 +644,7 @@ class MovieTab(ft.Container):
                 ft.Row(
                     [
                         CustomText("XPL + λ-Plate Rotated", weight=ft.FontWeight.W_900),
-                        CustomText("*Optional", italic=True, size=12),
+                        CustomText("*Optional", italic=False, size=12),
                         retardation_plate_pick_files_button,
                     ]
                 ),
@@ -666,7 +666,7 @@ class MovieTab(ft.Container):
                 ft.Row(
                     [
                         CustomText("XPL + λ-Plate 0°/45°", weight=ft.FontWeight.W_900),
-                        CustomText("*Optional; requires XPL+λ", italic=True, size=12),
+                        CustomText("*Optional; requires XPL+λ", italic=False, size=12),
                     ]
                 ),
                 ft.Row(
@@ -693,19 +693,19 @@ class MovieTab(ft.Container):
                 reset_button,
                 ft.Divider(),
 
-                ft.Row(
-                    [
-                        ft.Icon(ft.Icons.SETTINGS),
-                        CustomText("Setting"),
-                    ]
-                ),
-                ft.Row(
-                    [
-                        CustomText("1 px ="),
-                        one_pixel,
-                        CustomText("μm"),
-                    ]
-                ),
+                # ft.Row(
+                #     [
+                #         ft.Icon(ft.Icons.SETTINGS),
+                #         CustomText("Setting"),
+                #     ]
+                # ),
+                # ft.Row(
+                #     [
+                #         CustomText("1 px ="),
+                #         one_pixel,
+                #         CustomText("μm"),
+                #     ]
+                # ),
                 # ft.Row(
                 #     [
                 #         CustomText("image width resolution ="),

@@ -144,6 +144,7 @@ def on_click_center_button(stores: Stores, *, logger: Logger) -> None:
             update_r_color_map_display(stores)
 
             update_progress_bar(0.0, stores)
+            stores.ui.progress.set(2)
             switch_tab_index(stores, 2, logger=logger)
 
         except Exception as e:
