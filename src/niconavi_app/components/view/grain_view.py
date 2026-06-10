@@ -195,5 +195,11 @@ def at_grain_tab(stores: Stores) -> Figure:
                 mask=grain_mask,
                 display_color_bar=False,
             )
+        case 21:
+            return plot_RGBpicture(
+                stores,
+                stores.ui.map_tab.angle_map_display.get(),
+                mask=grain_mask,
+            )
         case _:
             return get_no_image()

@@ -245,6 +245,19 @@ class GrainTab:
         self.use_contrast: bool = False #! True: under develop
 
 
+class MapTab:
+    def __init__(self) -> None:
+        self.angle_map_info: State[Optional[dict[str, Any]]] = State(None)
+        self.angle_map_display: State[Optional[RGBPicture]] = State(None)
+        self.shock_filter_iterator: State[Optional[Any]] = State(None)
+        self.cleaning_count: State[int] = State(0)
+        self.segmentation_angle: State[int] = State(10)
+        self.fill_boundary_count: State[int] = State(0)
+        self.segmentation_done: State[bool] = State(False)
+        self.fill_boundary_started: State[bool] = State(False)
+        self.boundary_registered: State[bool] = State(False)
+
+
 class UI:
     def __init__(self) -> None:
         self.selected_index = State(0)
@@ -253,6 +266,7 @@ class UI:
         self.progress_bar = ProgressBar()
         self.movie_tab = MovieTabObj()
         self.grain_tab = GrainTab()
+        self.map_tab = MapTab()
         self.log_view = LogView()
         self.image_viewer = ImageViewer()
         self.force_update_image_view = State(0)

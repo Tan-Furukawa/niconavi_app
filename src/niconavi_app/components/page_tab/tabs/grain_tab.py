@@ -26,6 +26,7 @@ from niconavi_app.components.common_component import (
     CustomText,
     customDivider,
     CustomExecuteButton,
+    CustomReactiveText,
     CustomRadio,
     CustomReactiveCheckbox,
 )
@@ -55,6 +56,13 @@ from niconavi_app.components.page_tab.tabs.merge_component import (
     make_reset_button,
 )
 import niconavi_app.niconavi.run_all as po
+from niconavi_app.niconavi.angle_map_boundary import (
+    create_shock_filter_iterator,
+    fill_dark_boundaries,
+    grain_boundary_from_angle_labels,
+    make_theta_phi_angle_info,
+    segment_angle_map,
+)
 from niconavi_app.niconavi.tools.str_parser import (
     parse_int,
     parse_larger_than_0,
@@ -62,6 +70,24 @@ from niconavi_app.niconavi.tools.str_parser import (
 )
 from niconavi_app.components.labeling_app.reset import reset_filter_tab
 import traceback
+
+
+def reset_angle_map_workflow(stores: Stores) -> None:
+    raw_maps = stores.computation_result.raw_maps.get()
+    if raw_maps is None:
+        return
+
+    angle_map_info = make_theta_phi_angle_info(raw_maps)
+    stores.ui.map_tab.angle_map_info.set(angle_map_info)
+    stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
+    stores.ui.map_tab.shock_filter_iterator.set(create_shock_filter_iterator(angle_map_info))
+    stores.ui.map_tab.cleaning_count.set(0)
+    stores.ui.map_tab.fill_boundary_count.set(0)
+    stores.ui.map_tab.segmentation_angle.set(10)
+    stores.ui.map_tab.segmentation_done.set(False)
+    stores.ui.map_tab.fill_boundary_started.set(False)
+    stores.ui.map_tab.boundary_registered.set(False)
+    stores.ui.selected_button_at_grain_tab.set(21)
 
 
 def _apply_brightness_contrast(
@@ -219,6 +245,98 @@ def execute_grain_boundary_calc_button_click(
     # analyze_grain_list(stores, logger=logger)
 
 
+def cleaning_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
+    try:
+        iterator = stores.ui.map_tab.shock_filter_iterator.get()
+        if iterator is None:
+            reset_angle_map_workflow(stores)
+            iterator = stores.ui.map_tab.shock_filter_iterator.get()
+        if iterator is None:
+            return
+
+        angle_map_info = next(iterator)
+        stores.ui.map_tab.angle_map_info.set(angle_map_info)
+        stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
+        stores.ui.map_tab.cleaning_count.set(stores.ui.map_tab.cleaning_count.get() + 1)
+        stores.ui.selected_button_at_grain_tab.set(21)
+    except Exception:
+        update_logs(stores, ("Failed to clean angle map.", "err"))
+        traceback.print_exc()
+        logger.error(traceback.format_exc())
+
+
+def segmentation_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
+    try:
+        angle_map_info = stores.ui.map_tab.angle_map_info.get()
+        if angle_map_info is None:
+            reset_angle_map_workflow(stores)
+            angle_map_info = stores.ui.map_tab.angle_map_info.get()
+        if angle_map_info is None:
+            return
+
+        angle_map_info = segment_angle_map(
+            angle_map_info,
+            delta_euler_thresh=stores.ui.map_tab.segmentation_angle.get(),
+        )
+        stores.ui.map_tab.angle_map_info.set(angle_map_info)
+        stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
+        stores.ui.map_tab.segmentation_done.set(True)
+        stores.ui.map_tab.fill_boundary_started.set(False)
+        stores.ui.selected_button_at_grain_tab.set(21)
+    except Exception:
+        update_logs(stores, ("Failed to segment angle map.", "err"))
+        traceback.print_exc()
+        logger.error(traceback.format_exc())
+
+
+def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
+    try:
+        angle_map_info = stores.ui.map_tab.angle_map_info.get()
+        if angle_map_info is None:
+            return
+
+        next_count = stores.ui.map_tab.fill_boundary_count.get() + 1
+        angle_map_info = fill_dark_boundaries(
+            angle_map_info,
+            branch_width_thresh=next_count,
+        )
+        stores.ui.map_tab.angle_map_info.set(angle_map_info)
+        stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
+        stores.ui.map_tab.fill_boundary_count.set(next_count)
+        stores.ui.map_tab.fill_boundary_started.set(True)
+        stores.ui.selected_button_at_grain_tab.set(21)
+    except Exception:
+        update_logs(stores, ("Failed to fill dark boundaries.", "err"))
+        traceback.print_exc()
+        logger.error(traceback.format_exc())
+
+
+def ok_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
+    try:
+        angle_map_info = stores.ui.map_tab.angle_map_info.get()
+        if angle_map_info is None:
+            return
+
+        grain_map, grain_boundary = grain_boundary_from_angle_labels(angle_map_info)
+        grain_map = grain_map.astype(np.int32) + 1
+        grain_map_with_boundary = grain_map.copy()
+        grain_map_with_boundary[grain_boundary] = 0
+
+        stores.computation_result.grain_map.set(grain_map)
+        stores.computation_result.grain_map_original.set(grain_map.copy())
+        stores.computation_result.grain_boundary.set(grain_boundary)
+        stores.computation_result.grain_boundary_original.set(grain_boundary.copy())
+        stores.computation_result.grain_map_with_boundary.set(grain_map_with_boundary)
+        stores.ui.display_grain_boundary.set(True)
+        stores.ui.map_tab.boundary_registered.set(True)
+        stores.ui.selected_button_at_grain_tab.set(7)
+        update_logs(stores, ("Angle-map grain boundaries registered.", "ok"))
+    except Exception:
+        update_logs(stores, ("Failed to register grain boundaries.", "err"))
+        traceback.print_exc()
+        logger.error(traceback.format_exc())
+
+
 def make_execute_grain_boundary_calc_button(
     stores: Stores, *, logger: Logger
 ) -> ReactiveElevatedButton:
@@ -312,225 +430,113 @@ class GrainTab(ft.Container):
 
         self.padding = stores.appearance.tab_padding
 
-        smallest_grain_size = make_reactive_float_text_filed(
+        segmentation_angle = make_reactive_float_text_filed(
             stores,
-            stores.computation_result.grain_detection_parameters.smallest_grain_size,
-            parse_larger_than_1,
-        )
-
-        th_about_connect_skeleton_endpoints = make_reactive_float_text_filed(
-            stores,
-            stores.computation_result.grain_detection_parameters.th_about_connect_skeleton_endpoints,
+            stores.ui.map_tab.segmentation_angle,
             parse_int,
             accept_None=False,
         )
 
-        th_about_hessian_emphasis = make_reactive_float_text_filed(
-            stores,
-            stores.computation_result.grain_detection_parameters.th_about_hessian_emphasis,
-            parse_larger_than_0,
-            accept_None=False,
+        can_use_angle_map = ReactiveState(
+            lambda: (
+                stores.ui.computing_is_stop.get()
+                and stores.computation_result.raw_maps.get() is not None
+            ),
+            [stores.ui.computing_is_stop, stores.computation_result.raw_maps],
         )
-
-        execute_grain_boundary_calc_button = make_execute_grain_boundary_calc_button(
-            stores, logger=logger
+        cleaning_visible = ReactiveState(
+            lambda: can_use_angle_map.get()
+            and not stores.ui.map_tab.segmentation_done.get(),
+            [can_use_angle_map, stores.ui.map_tab.segmentation_done],
         )
-
-        continue_button = make_continue_button_visible(stores, logger=logger)
-
-        # azimuth_use_checkbox = make_azimuth_ex_angle_radio(stores)
-
-        marge_panel = ReactiveExpansionTile(
-            # visible=visible_marge_panel,
-            visible=False, #! つかわないから隠す
-            title=CustomText("Merge grains by code"),
-            affinity=ft.TileAffinity.PLATFORM,
-            maintain_state=False,
-            # bgcolor=ft.Colors.BLACK87,
-            # collapsed_bgcolor=ft.Colors.BLACK87,
-            controls=[
-                ft.Column(
-                    [
-                        make_code_input(stores),
-                        ft.Row(
-                            [
-                                make_merge_button(stores, logger=logger),
-                                make_reset_button(stores, logger=logger),
-                            ]
-                        ),
-                        make_continue_button(stores, logger=logger),
-                    ]
-                ),
-            ],
+        segmentation_visible = ReactiveState(
+            lambda: can_use_angle_map.get()
+            and not stores.ui.map_tab.fill_boundary_started.get(),
+            [can_use_angle_map, stores.ui.map_tab.fill_boundary_started],
         )
-
-        def _on_brightness_change(value: float) -> None:
-            stores.ui.grain_tab.slider_brightness.set(value)
-            update_r_color_map_display(stores)
-
-        def _on_contrast_change(value: float) -> None:
-            stores.ui.grain_tab.slider_contrast.set(value)
-            update_r_color_map_display(stores)
-
-        def _on_brightness_correction_change(value: bool) -> None:
-            stores.ui.grain_tab.brightness_correction.set(value)
-            update_r_color_map_display(stores)
-
-        def _on_median_change(value: float) -> None:
-            kernel = _snap_to_odd(value)
-            stores.ui.grain_tab.slider_median_kernel.set(kernel)
-            update_r_color_map_display(stores)
+        fill_visible = ReactiveState(
+            lambda: can_use_angle_map.get()
+            and stores.ui.map_tab.segmentation_done.get(),
+            [can_use_angle_map, stores.ui.map_tab.segmentation_done],
+        )
+        continue_visible = ReactiveState(
+            lambda: stores.ui.computing_is_stop.get()
+            and stores.computation_result.grain_map.get() is not None,
+            [stores.ui.computing_is_stop, stores.computation_result.grain_map],
+        )
 
         content = ft.Column(
             [
-                ft.Column(
-                    [
-                        ft.Column(
-                            [
-                                ft.Row(
-                                    [
-                                        CustomText("Brightness"),
-                                        ReactiveSlider(
-                                            value=stores.ui.grain_tab.slider_brightness,
-                                            min=0.2,
-                                            max=2.0,
-                                            divisions=90,
-                                            on_change=lambda e: _on_brightness_change(
-                                                float(e.control.value)
-                                            ),
-                                        ),
-                                    ],
-                                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                                    visible=stores.ui.grain_tab.use_brightness,
-                                ),
-                                ft.Row(
-                                    [
-                                        CustomText("Contrast"),
-                                        ReactiveSlider(
-                                            value=stores.ui.grain_tab.slider_contrast,
-                                            min=0.2,
-                                            max=2.0,
-                                            divisions=90,
-                                            on_change=lambda e: _on_contrast_change(
-                                                float(e.control.value)
-                                            ),
-                                        ),
-                                    ],
-                                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                                    visible=stores.ui.grain_tab.use_contrast,
-                                ),
-                                ft.Row(
-                                    [
-                                        CustomText("Median filter kernel"),
-                                        ReactiveSlider(
-                                            value=stores.ui.grain_tab.slider_median_kernel,
-                                            min=1,
-                                            max=21,
-                                            divisions=10,
-                                            on_change=lambda e: _on_median_change(
-                                                float(e.control.value)
-                                            ),
-                                        ),
-                                    ],
-                                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                                ),
-                                ft.Row(
-                                    [
-                                        CustomReactiveCheckbox(
-                                            value=stores.ui.grain_tab.brightness_correction,
-                                            label="Brightness correction",
-                                            on_change=lambda e: _on_brightness_correction_change(
-                                                bool(e.control.value)
-                                            ),
-                                        )
-                                    ],
-                                    alignment=ft.MainAxisAlignment.START,
-                                ),
-                                ft.Divider(),
-                            ]
-                        ),
-
-                        ft.Row(
-                            [
-                                CustomText("Boundary detection sensitivity"),
-                                make_REMOVE_counter_button(
-                                    stores,
-                                    stores.computation_result.grain_detection_parameters.th_about_hessian_emphasis,
-                                    step=0.05,
-                                    min_value=0.0,
-                                    max_value=1.0,
-                                    precision=2,
-                                    value_type=float,
-                                ),
-                                th_about_hessian_emphasis,
-                                make_ADD_counter_button(
-                                    stores,
-                                    stores.computation_result.grain_detection_parameters.th_about_hessian_emphasis,
-                                    step=0.05,
-                                    min_value=0.0,
-                                    max_value=1.0,
-                                    precision=2,
-                                    value_type=float,
-                                ),
-                            ]
-                        ),
-                        ft.Row(
-                            [
-                                CustomText("Boundary connectivity"),
-                                make_REMOVE_counter_button(
-                                    stores,
-                                    stores.computation_result.grain_detection_parameters.th_about_connect_skeleton_endpoints,
-                                    step=5,
-                                    min_value=0,
-                                    max_value=100,
-                                    value_type=int,
-                                ),
-                                th_about_connect_skeleton_endpoints,
-                                make_ADD_counter_button(
-                                    stores,
-                                    stores.computation_result.grain_detection_parameters.th_about_connect_skeleton_endpoints,
-                                    step=5,
-                                    min_value=0,
-                                    max_value=100,
-                                    value_type=int,
-                                ),
-                            ]
-                        ),
-                        ft.Row(
-                            [
-                                CustomText("Smallest grain size"),
-                                make_REMOVE_counter_button(
-                                    stores,
-                                    stores.computation_result.grain_detection_parameters.smallest_grain_size,
-                                    step=10,
-                                    min_value=1,
-                                    max_value=200,
-                                    value_type=int,
-                                ),
-                                smallest_grain_size,
-                                make_ADD_counter_button(
-                                    stores,
-                                    stores.computation_result.grain_detection_parameters.smallest_grain_size,
-                                    step=10,
-                                    min_value=0,
-                                    max_value=200,
-                                    value_type=int,
-                                ),
-                            ]
-                        ),
-                    ],
-                ),
-                customDivider(),
-                execute_grain_boundary_calc_button,
-                # grain_boundary_checkbox,
                 ft.Row(
                     [
-                        continue_button,
-                        # edit_button,
+                        CustomExecuteButton(
+                            "Cleaning",
+                            on_click=lambda e: cleaning_button_click(
+                                stores, e, logger=logger
+                            ),
+                            visible=cleaning_visible,
+                        ),
+                        CustomReactiveText(
+                            ReactiveState(
+                                lambda: str(stores.ui.map_tab.cleaning_count.get()),
+                                [stores.ui.map_tab.cleaning_count],
+                            ),
+                            visible=cleaning_visible,
+                        ),
                     ]
                 ),
-                # parameter_setting,
-                marge_panel,
+                ft.Row(
+                    [
+                        CustomExecuteButton(
+                            "Segmentation",
+                            on_click=lambda e: segmentation_button_click(
+                                stores, e, logger=logger
+                            ),
+                            visible=segmentation_visible,
+                        ),
+                        CustomText("angle:"),
+                        segmentation_angle,
+                    ]
+                ),
+                ft.Row(
+                    [
+                        CustomExecuteButton(
+                            "Fill boundary",
+                            on_click=lambda e: fill_boundary_button_click(
+                                stores, e, logger=logger
+                            ),
+                            visible=fill_visible,
+                        ),
+                        CustomReactiveText(
+                            ReactiveState(
+                                lambda: str(stores.ui.map_tab.fill_boundary_count.get()),
+                                [stores.ui.map_tab.fill_boundary_count],
+                            ),
+                            visible=fill_visible,
+                        ),
+                    ]
+                ),
+                ft.Row(
+                    [
+                        CustomExecuteButton(
+                            "OK",
+                            on_click=lambda e: ok_button_click(stores, e, logger=logger),
+                            visible=fill_visible,
+                        ),
+                        CustomExecuteButton(
+                            "Continue",
+                            on_click=lambda e: continue_button_click(
+                                stores, e, logger=logger
+                            ),
+                            visible=continue_visible,
+                        ),
+                        CustomExecuteButton(
+                            "Reset",
+                            on_click=lambda e: reset_angle_map_workflow(stores),
+                            visible=can_use_angle_map,
+                        ),
+                    ]
+                ),
             ],
             scroll=ft.ScrollMode.ADAPTIVE,
         )

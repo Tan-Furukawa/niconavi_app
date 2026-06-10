@@ -42,6 +42,7 @@ class ImageSelector(ft.Container):
             gr_degree_22_5,
             gr_degree_45,
             gr_degree_67_5,
+            gr_angle_map,
             gr_R_color,
             gr_min_retardation_color,
             gr_retardation,
@@ -122,6 +123,7 @@ class ImageSelector(ft.Container):
                 # tab
                 gr_mask,
                 make_reactive_text(stores, "XRL", 2),
+                gr_angle_map,
                 gr_R_color,
                 gr_retardation,
                 # gr_quality,

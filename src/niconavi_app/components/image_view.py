@@ -105,6 +105,7 @@ class ImageView(ft.Container):
             stores.ui.grain_tab.slider_brightness,
             stores.ui.grain_tab.slider_median_kernel,
             stores.ui.grain_tab.brightness_correction,
+            stores.ui.map_tab.angle_map_display,
             stores.computation_result.plot_parameters.histogram_bins,
             stores.computation_result.plot_parameters.rose_diagram_bins,
             stores.computation_result.plot_parameters.rose_diagram180_bins,

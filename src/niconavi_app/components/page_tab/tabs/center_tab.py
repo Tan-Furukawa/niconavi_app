@@ -3,7 +3,10 @@ from niconavi_app.stores import (
     as_ComputationResult,
     save_in_ComputationResultState,
 )
-from niconavi_app.components.page_tab.tabs.grain_tab import update_r_color_map_display
+from niconavi_app.components.page_tab.tabs.grain_tab import (
+    reset_angle_map_workflow,
+    update_r_color_map_display,
+)
 from niconavi_app.tools.tools import switch_tab_index
 from niconavi_app.tools.parser import parse_float_larger_than_0, to_str
 from niconavi_app.reactive_state import ReactiveElevatedButton
@@ -142,6 +145,7 @@ def on_click_center_button(stores: Stores, *, logger: Logger) -> None:
             update_logs(stores, ("Image processing completed.", "ok"), logger=logger)
             save_in_ComputationResultState(r, stores)
             update_r_color_map_display(stores)
+            reset_angle_map_workflow(stores)
 
             update_progress_bar(0.0, stores)
             stores.ui.progress.set(2)

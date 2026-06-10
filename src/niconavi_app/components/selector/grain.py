@@ -31,6 +31,7 @@ def make_grain_classification_button_visible_state(
     ReactiveElevatedButtonInSelector,
     ReactiveElevatedButtonInSelector,
     ReactiveElevatedButtonInSelector,
+    ReactiveElevatedButtonInSelector,
 ]:
 
     degree_0 = make_elevated_button(
@@ -85,6 +86,16 @@ def make_grain_classification_button_visible_state(
         selected_index,
         5,
         [stores.computation_result.raw_maps],
+    )
+
+    angle_map = make_elevated_button(
+        stores,
+        "Angle map",
+        stores.ui.selected_button_at_grain_tab,
+        selected_index,
+        21,
+        [stores.ui.map_tab.angle_map_display],
+        lambda: stores.ui.map_tab.angle_map_display.get() is not None,
     )
 
     extinction_color = make_elevated_button(
@@ -241,6 +252,7 @@ def make_grain_classification_button_visible_state(
         degree_22_5,
         degree_45,
         degree_67_5,
+        angle_map,
         R_color,
         extinction_color,
         retardation,
