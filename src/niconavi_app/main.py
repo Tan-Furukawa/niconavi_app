@@ -15,7 +15,11 @@ from niconavi_app.stores import (
 from niconavi_app.niconavi.type import GrainDetectionParameters, ComputationResult
 from niconavi_app.components.progress_bar import update_progress_bar
 
-from niconavi_app.components.app_bar import niconaviAppBar, restore_filter_tab_view
+from niconavi_app.components.app_bar import (
+    load_existing_project,
+    niconaviAppBar,
+    restore_filter_tab_view,
+)
 from niconavi_app.components.page_tab.page_tab import PageTabs
 from niconavi_app.components.log_view import create_column, update_logs, LogView
 from niconavi_app.components.image_view import ImageView
@@ -49,6 +53,20 @@ os.environ.setdefault("FLET_UPLOAD_DIR", str(UPLOAD_ROOT))
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+DEBUG_START_PROJECT_DIR = PROJECT_ROOT / "gui" / "for-debug" / "start-from-project"
+
+
+def find_debug_start_project() -> Path | None:
+    if not DEBUG_START_PROJECT_DIR.exists():
+        return None
+    project_files = [
+        path
+        for path in DEBUG_START_PROJECT_DIR.iterdir()
+        if path.is_file() and path.suffix.lower() == ".niconavi"
+    ]
+    if not project_files:
+        return None
+    return max(project_files, key=lambda path: path.stat().st_mtime)
 
 
 def main(page: ft.Page) -> None:
@@ -175,6 +193,24 @@ def main(page: ft.Page) -> None:
     page.update()
 
     logger.info("Page layout and elements have been updated.")
+
+    debug_project_path = find_debug_start_project()
+    if debug_project_path is not None:
+        try:
+            load_existing_project(stores, str(debug_project_path))
+            update_logs(
+                stores,
+                (f"Loaded debug start project: {debug_project_path}", "ok"),
+                logger=logger,
+            )
+            page.update()
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to load debug start project: %s", exc)
+            update_logs(
+                stores,
+                (f"Failed to load debug start project: {debug_project_path}", "err"),
+                logger=logger,
+            )
 
 
 @asynccontextmanager
