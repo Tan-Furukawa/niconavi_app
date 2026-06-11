@@ -60,7 +60,7 @@ from niconavi_app.niconavi.retardation_normalization import (
 from niconavi_app.niconavi.rorate import fitting_by_rotation
 from niconavi_app.niconavi.tools.array import pick_element_from_array
 from niconavi_app.niconavi.tools.change_type import as_two_element_tuple
-from niconavi_app.niconavi.tools.read_data import divide_video_into_n_frame
+from niconavi_app.niconavi.tools.read_data import divide_video_into_n_frame, get_video_resolution
 from niconavi_app.niconavi.tools.type import D2BoolArray, D1FloatArray
 from niconavi_app.niconavi.type import (
     ColorChart,
@@ -111,24 +111,24 @@ def load_data(
         try:
             video_path = params.video_path
 
+            original_resolution = get_video_resolution(video_path)
             pics = divide_video_into_n_frame(
-                video_path, params.frame_number, progress_callback
+                video_path,
+                params.frame_number,
+                progress_callback,
+                resize_width=params.resolution_width,
             )
-
-            resized_pics = resize_image_list(pics, params.resolution_width)
-            list(map(lambda x: resize_img(x, params.resolution_width), pics))
             h, w = as_two_element_tuple(pics[0].shape)
-            original_resolution = (w, h)
 
             if not is_not_None_type(params.reta_video_path):
                 return ComputationResult(
                     **{
                         **params.__dict__,
-                        "pics": resized_pics,
+                        "pics": pics,
                         "original_resolution": original_resolution,
                         "first_image": {
                             **params.first_image,
-                            "xpl": resized_pics[0],
+                            "xpl": pics[0],
                         },
                     }
                 )
@@ -136,15 +136,15 @@ def load_data(
             else:
                 try:
                     reta_video_path = params.reta_video_path
+                    original_reta_resolution = get_video_resolution(reta_video_path)
                     reta_pics = divide_video_into_n_frame(
-                        reta_video_path, params.frame_number, progress_callback
+                        reta_video_path,
+                        params.frame_number,
+                        progress_callback,
+                        resize_width=params.resolution_width,
                     )
                     # if reta_pics[0].shape != pics[0].shape:
                     #     raise ValueError("different shape between reta_pics and pics")
-
-                    resized_reta_pics = resize_image_list(
-                        reta_pics, params.resolution_width
-                    )
                     if not (
                         is_not_None_type(params.tilt_image_info.tilt_image0_path)
                         # and is_not_None_type(params.tilt_image_info.image45_path)
@@ -153,51 +153,43 @@ def load_data(
                         return ComputationResult(
                             **{
                                 **params.__dict__,
-                                "pics": resized_pics,
-                                "reta_pics": resized_reta_pics,
+                                "pics": pics,
+                                "reta_pics": reta_pics,
                                 "first_image": {
                                     **params.first_image,
-                                    "xpl": resized_pics[0],
-                                    "full_wave": resized_reta_pics[0],
+                                    "xpl": pics[0],
+                                    "full_wave": reta_pics[0],
                                 },
                                 "original_resolution": original_resolution,
-                                "original_reta_resolution": as_two_element_tuple(
-                                    reta_pics[0].shape
-                                ),
+                                "original_reta_resolution": original_reta_resolution,
                                 "resolution_height": h,
                             }
                         )
                     else:
-                        image0 = [resized_reta_pics[0]]
+                        image0 = [reta_pics[0]]
                         image45 = (
-                            resize_image_list(
-                                divide_video_into_n_frame(
-                                    params.tilt_image_info.image45_path,
-                                    1,
-                                    progress_callback,
-                                ),
-                                params.resolution_width,
+                            divide_video_into_n_frame(
+                                params.tilt_image_info.image45_path,
+                                1,
+                                progress_callback,
+                                resize_width=params.resolution_width,
                             )
                             if is_not_None_type(params.tilt_image_info.image45_path)
                             else None
                         )
-                        tilt0 = resize_image_list(
-                            divide_video_into_n_frame(
-                                params.tilt_image_info.tilt_image0_path,
-                                params.tilt_image_info.frame_num,
-                                progress_callback,
-                            ),
-                            params.resolution_width,
+                        tilt0 = divide_video_into_n_frame(
+                            params.tilt_image_info.tilt_image0_path,
+                            params.tilt_image_info.frame_num,
+                            progress_callback,
+                            resize_width=params.resolution_width,
                         )
 
                         tilt45 = (
-                            resize_image_list(
-                                divide_video_into_n_frame(
-                                    params.tilt_image_info.tilt_image45_path,
-                                    params.tilt_image_info.frame_num,
-                                    progress_callback,
-                                ),
-                                params.resolution_width,
+                            divide_video_into_n_frame(
+                                params.tilt_image_info.tilt_image45_path,
+                                params.tilt_image_info.frame_num,
+                                progress_callback,
+                                resize_width=params.resolution_width,
                             )
                             if is_not_None_type(
                                 params.tilt_image_info.tilt_image45_path
@@ -208,12 +200,10 @@ def load_data(
                         return ComputationResult(
                             **{
                                 **params.__dict__,
-                                "pics": resized_pics,
-                                "reta_pics": resized_reta_pics,
+                                "pics": pics,
+                                "reta_pics": reta_pics,
                                 "original_resolution": original_resolution,
-                                "original_reta_resolution": as_two_element_tuple(
-                                    reta_pics[0].shape
-                                ),
+                                "original_reta_resolution": original_reta_resolution,
                                 "resolution_height": h,
                                 "tilt_image_info": TiltImageInfo(
                                     **{
@@ -226,8 +216,8 @@ def load_data(
                                 ),
                                 "first_image": {
                                     **params.first_image,
-                                    "xpl": resized_pics[0],
-                                    "full_wave": resized_reta_pics[0],
+                                    "xpl": pics[0],
+                                    "full_wave": reta_pics[0],
                                     "image0": image0[0],
                                     "image0_tilt": tilt0[0],
                                     "image45": (

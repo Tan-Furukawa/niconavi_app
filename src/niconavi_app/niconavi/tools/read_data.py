@@ -144,7 +144,10 @@ import importlib.resources
 
 
 def divide_video_into_n_frame(
-    video_path: str, n: int, progress_callback: Callable[[float], None] = lambda p: None
+    video_path: str,
+    n: int,
+    progress_callback: Callable[[float], None] = lambda p: None,
+    resize_width: int | None = None,
 ) -> list[RGBPicture]:
     """
     動画ファイルから n 個の等間隔フレームを抽出して返す関数（set()を利用した修正版）。
@@ -166,6 +169,8 @@ def divide_video_into_n_frame(
     import numpy as np
     from tqdm import tqdm
     from typing import Callable, cast
+
+    from niconavi_app.niconavi.image.image import resize_img
 
     # 動画ファイルの存在確認
     if not os.path.exists(video_path):
@@ -197,6 +202,8 @@ def divide_video_into_n_frame(
             raise ValueError(f"Could not read frame at index {target}.")
         # BGR → RGB 変換
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        if resize_width is not None:
+            frame = resize_img(frame, resize_width)
         frames.append(frame)
         pbar.update(1)
         progress_callback(len(frames) / n)
@@ -204,6 +211,34 @@ def divide_video_into_n_frame(
     pbar.close()
     cap.release()
     return cast(list[RGBPicture], frames)
+
+
+def get_video_resolution(video_path: str) -> tuple[int, int]:
+    import os
+    import cv2
+
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(
+            f"The specified video file does not exist: {video_path}"
+        )
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Could not open video file: {video_path}")
+
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    if width <= 0 or height <= 0:
+        ret, frame = cap.read()
+        cap.release()
+        if not ret:
+            raise ValueError("The video contains no frames.")
+        height, width = frame.shape[:2]
+        return width, height
+
+    cap.release()
+    return width, height
 
 
 def get_first_frame_from_video(video_path: str) -> RGBPicture:
