@@ -323,7 +323,10 @@ def label_enclosed_false_regions(mask: BoolMatrix, connectivity: int = 4) -> Ind
 
 
 def component_info_to_feature_matrix(component_info: List[Dict]) -> np.ndarray:
-    """成分情報リストから特徴量行列 (N, 9) を構築する。"""
+    """成分IDで直接indexできる特徴量行列を構築する。
+
+    index_map の 0 は背景/境界なので、0行目は未使用のダミーにする。
+    """
 
     feature_keys = [
         "logA",
@@ -340,11 +343,12 @@ def component_info_to_feature_matrix(component_info: List[Dict]) -> np.ndarray:
     if not component_info:
         return np.zeros((0, len(feature_keys)), dtype=np.float64)
 
+    max_index = max(int(info["index"]) for info in component_info)
     feature_matrix = np.zeros(
-        (len(component_info), len(feature_keys)), dtype=np.float64
+        (max_index + 1, len(feature_keys)), dtype=np.float64
     )
-    for idx, info in enumerate(component_info):
-        feature_matrix[idx] = [float(info[key]) for key in feature_keys]
+    for info in component_info:
+        feature_matrix[int(info["index"])] = [float(info[key]) for key in feature_keys]
 
     return feature_matrix
 

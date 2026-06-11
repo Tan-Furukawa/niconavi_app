@@ -351,7 +351,7 @@ class LabelingController:
                 predictions = np.asarray(refreshed).astype(np.int32, copy=True)
             if np.any(predictions == 0):
                 probabilities = self.clf.current_probabilities()
-                classes = self.clf.lp_.classes_ if self.clf.lp_ is not None else None
+                classes = self.clf.probability_classes()
                 if probabilities is not None and classes is not None:
                     classes = np.asarray(classes)
                     nonzero_mask = classes != 0
@@ -708,7 +708,7 @@ class LabelingController:
         # print("---------")
         if probabilities is None:
             return predictions
-        classes = self.clf.lp_.classes_ if self.clf.lp_ is not None else None
+        classes = self.clf.probability_classes()
         if classes is None:
             return predictions
         nonzero_mask = classes != 0
