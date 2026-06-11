@@ -87,7 +87,7 @@ def reset_angle_map_workflow(stores: Stores) -> None:
     stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
     stores.ui.map_tab.shock_filter_iterator.set(create_shock_filter_iterator(angle_map_info))
     stores.ui.map_tab.cleaning_count.set(0)
-    stores.ui.map_tab.fill_boundary_count.set(0)
+    stores.ui.map_tab.fill_boundary_count.set(0.0)
     stores.ui.map_tab.segmentation_angle.set(10)
     stores.ui.map_tab.segmentation_done.set(False)
     stores.ui.map_tab.fill_boundary_started.set(False)
@@ -316,10 +316,13 @@ def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Lo
             update_progress_bar(0.0, stores)
             return
 
-        next_count = stores.ui.map_tab.fill_boundary_count.get() + 1
+        next_count = stores.ui.map_tab.fill_boundary_count.get() + 0.5
         angle_map_info = fill_dark_boundaries(
             angle_map_info,
+            dark_l_thresh=15,
             branch_width_thresh=next_count,
+            max_iterations=3,
+            fixed_skeleton_once=False,
         )
         stores.ui.map_tab.angle_map_info.set(angle_map_info)
         stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
@@ -611,7 +614,7 @@ class GrainTab(ft.Container):
                         ),
                         CustomReactiveText(
                             ReactiveState(
-                                lambda: str(stores.ui.map_tab.fill_boundary_count.get()),
+                                lambda: f"{stores.ui.map_tab.fill_boundary_count.get():g}",
                                 [stores.ui.map_tab.fill_boundary_count],
                             ),
                             visible=has_angle_map_source,

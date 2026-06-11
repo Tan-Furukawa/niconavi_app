@@ -246,7 +246,7 @@ class MapTab:
         self.shock_filter_iterator: State[Optional[Any]] = State(None)
         self.cleaning_count: State[int] = State(0)
         self.segmentation_angle: State[int] = State(10)
-        self.fill_boundary_count: State[int] = State(0)
+        self.fill_boundary_count: State[float] = State(0.0)
         self.segmentation_done: State[bool] = State(False)
         self.fill_boundary_started: State[bool] = State(False)
         self.boundary_registered: State[bool] = State(False)
