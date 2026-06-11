@@ -72,6 +72,11 @@ from niconavi_app.components.labeling_app.reset import reset_filter_tab
 import traceback
 
 
+def select_grain_tab_image(stores: Stores, button_index: int) -> None:
+    stores.ui.display_common_image_view.set(False)
+    stores.ui.selected_button_at_grain_tab.set(button_index)
+
+
 def reset_angle_map_workflow(stores: Stores) -> None:
     raw_maps = stores.computation_result.raw_maps.get()
     if raw_maps is None:
@@ -87,7 +92,13 @@ def reset_angle_map_workflow(stores: Stores) -> None:
     stores.ui.map_tab.segmentation_done.set(False)
     stores.ui.map_tab.fill_boundary_started.set(False)
     stores.ui.map_tab.boundary_registered.set(False)
-    stores.ui.selected_button_at_grain_tab.set(21)
+    stores.ui.display_grain_boundary.set(False)
+    stores.computation_result.grain_map.set(None)
+    stores.computation_result.grain_map_original.set(None)
+    stores.computation_result.grain_boundary.set(None)
+    stores.computation_result.grain_boundary_original.set(None)
+    stores.computation_result.grain_map_with_boundary.set(None)
+    select_grain_tab_image(stores, 21)
 
 
 def _apply_brightness_contrast(
@@ -247,31 +258,37 @@ def execute_grain_boundary_calc_button_click(
 
 def cleaning_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
     try:
+        update_progress_bar(None, stores)
         iterator = stores.ui.map_tab.shock_filter_iterator.get()
         if iterator is None:
             reset_angle_map_workflow(stores)
             iterator = stores.ui.map_tab.shock_filter_iterator.get()
         if iterator is None:
+            update_progress_bar(0.0, stores)
             return
 
         angle_map_info = next(iterator)
         stores.ui.map_tab.angle_map_info.set(angle_map_info)
         stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
         stores.ui.map_tab.cleaning_count.set(stores.ui.map_tab.cleaning_count.get() + 1)
-        stores.ui.selected_button_at_grain_tab.set(21)
+        select_grain_tab_image(stores, 21)
+        update_progress_bar(0.0, stores)
     except Exception:
         update_logs(stores, ("Failed to clean angle map.", "err"))
+        update_progress_bar(0.0, stores)
         traceback.print_exc()
         logger.error(traceback.format_exc())
 
 
 def segmentation_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
     try:
+        update_progress_bar(None, stores)
         angle_map_info = stores.ui.map_tab.angle_map_info.get()
         if angle_map_info is None:
             reset_angle_map_workflow(stores)
             angle_map_info = stores.ui.map_tab.angle_map_info.get()
         if angle_map_info is None:
+            update_progress_bar(0.0, stores)
             return
 
         angle_map_info = segment_angle_map(
@@ -282,17 +299,21 @@ def segmentation_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Log
         stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
         stores.ui.map_tab.segmentation_done.set(True)
         stores.ui.map_tab.fill_boundary_started.set(False)
-        stores.ui.selected_button_at_grain_tab.set(21)
+        select_grain_tab_image(stores, 21)
+        update_progress_bar(0.0, stores)
     except Exception:
         update_logs(stores, ("Failed to segment angle map.", "err"))
+        update_progress_bar(0.0, stores)
         traceback.print_exc()
         logger.error(traceback.format_exc())
 
 
 def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
     try:
+        update_progress_bar(None, stores)
         angle_map_info = stores.ui.map_tab.angle_map_info.get()
         if angle_map_info is None:
+            update_progress_bar(0.0, stores)
             return
 
         next_count = stores.ui.map_tab.fill_boundary_count.get() + 1
@@ -304,17 +325,21 @@ def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Lo
         stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
         stores.ui.map_tab.fill_boundary_count.set(next_count)
         stores.ui.map_tab.fill_boundary_started.set(True)
-        stores.ui.selected_button_at_grain_tab.set(21)
+        select_grain_tab_image(stores, 21)
+        update_progress_bar(0.0, stores)
     except Exception:
         update_logs(stores, ("Failed to fill dark boundaries.", "err"))
+        update_progress_bar(0.0, stores)
         traceback.print_exc()
         logger.error(traceback.format_exc())
 
 
 def ok_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
     try:
+        update_progress_bar(None, stores)
         angle_map_info = stores.ui.map_tab.angle_map_info.get()
         if angle_map_info is None:
+            update_progress_bar(0.0, stores)
             return
 
         grain_map, grain_boundary = grain_boundary_from_angle_labels(angle_map_info)
@@ -329,12 +354,58 @@ def ok_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> No
         stores.computation_result.grain_map_with_boundary.set(grain_map_with_boundary)
         stores.ui.display_grain_boundary.set(True)
         stores.ui.map_tab.boundary_registered.set(True)
-        stores.ui.selected_button_at_grain_tab.set(7)
+        select_grain_tab_image(stores, 7)
         update_logs(stores, ("Angle-map grain boundaries registered.", "ok"))
+        update_progress_bar(0.0, stores)
     except Exception:
         update_logs(stores, ("Failed to register grain boundaries.", "err"))
+        update_progress_bar(0.0, stores)
         traceback.print_exc()
         logger.error(traceback.format_exc())
+
+
+def reset_angle_map_button_click(
+    stores: Stores,
+    e: ft.ControlEvent,
+    *,
+    logger: Logger,
+) -> None:
+    try:
+        update_progress_bar(None, stores)
+        reset_angle_map_workflow(stores)
+        update_progress_bar(0.0, stores)
+    except Exception:
+        update_logs(stores, ("Failed to reset angle map.", "err"))
+        update_progress_bar(0.0, stores)
+        traceback.print_exc()
+        logger.error(traceback.format_exc())
+
+
+def make_map_action_button(
+    text: str,
+    *,
+    visible: ReactiveState[bool],
+    enabled: ReactiveState[bool],
+    on_click: Callable[[ft.ControlEvent], None],
+) -> ReactiveElevatedButton:
+    button = ReactiveElevatedButton(
+        text,
+        visible=visible,
+        bgcolor=ReactiveState(
+            lambda: (
+                ft.Colors.LIGHT_GREEN_700
+                if enabled.get()
+                else ft.Colors.BLUE_GREY_700
+            ),
+            [enabled],
+        ),
+        on_click=lambda e: on_click(e) if enabled.get() else None,
+    )
+    button.height = 30
+    button.content_padding = ft.padding.only(left=10, top=3, bottom=3)
+    button.color = ft.Colors.WHITE
+    button.style = ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=5))
+    return button
 
 
 def make_execute_grain_boundary_calc_button(
@@ -437,6 +508,10 @@ class GrainTab(ft.Container):
             accept_None=False,
         )
 
+        has_angle_map_source = ReactiveState(
+            lambda: stores.computation_result.raw_maps.get() is not None,
+            [stores.computation_result.raw_maps],
+        )
         can_use_angle_map = ReactiveState(
             lambda: (
                 stores.ui.computing_is_stop.get()
@@ -444,55 +519,81 @@ class GrainTab(ft.Container):
             ),
             [stores.ui.computing_is_stop, stores.computation_result.raw_maps],
         )
-        cleaning_visible = ReactiveState(
+        cleaning_enabled = ReactiveState(
             lambda: can_use_angle_map.get()
             and not stores.ui.map_tab.segmentation_done.get(),
             [can_use_angle_map, stores.ui.map_tab.segmentation_done],
         )
-        segmentation_visible = ReactiveState(
+        segmentation_enabled = ReactiveState(
             lambda: can_use_angle_map.get()
+            and not stores.ui.map_tab.boundary_registered.get()
             and not stores.ui.map_tab.fill_boundary_started.get(),
-            [can_use_angle_map, stores.ui.map_tab.fill_boundary_started],
+            [
+                can_use_angle_map,
+                stores.ui.map_tab.boundary_registered,
+                stores.ui.map_tab.fill_boundary_started,
+            ],
         )
-        fill_visible = ReactiveState(
+        fill_enabled = ReactiveState(
             lambda: can_use_angle_map.get()
-            and stores.ui.map_tab.segmentation_done.get(),
-            [can_use_angle_map, stores.ui.map_tab.segmentation_done],
+            and stores.ui.map_tab.segmentation_done.get()
+            and not stores.ui.map_tab.boundary_registered.get(),
+            [
+                can_use_angle_map,
+                stores.ui.map_tab.segmentation_done,
+                stores.ui.map_tab.boundary_registered,
+            ],
         )
-        continue_visible = ReactiveState(
+        ok_enabled = ReactiveState(
+            lambda: can_use_angle_map.get()
+            and stores.ui.map_tab.segmentation_done.get()
+            and not stores.ui.map_tab.boundary_registered.get(),
+            [
+                can_use_angle_map,
+                stores.ui.map_tab.segmentation_done,
+                stores.ui.map_tab.boundary_registered,
+            ],
+        )
+        continue_enabled = ReactiveState(
             lambda: stores.ui.computing_is_stop.get()
-            and stores.computation_result.grain_map.get() is not None,
-            [stores.ui.computing_is_stop, stores.computation_result.grain_map],
+            and stores.ui.map_tab.boundary_registered.get(),
+            [stores.ui.computing_is_stop, stores.ui.map_tab.boundary_registered],
+        )
+        reset_enabled = ReactiveState(
+            lambda: can_use_angle_map.get(),
+            [can_use_angle_map],
         )
 
         content = ft.Column(
             [
                 ft.Row(
                     [
-                        CustomExecuteButton(
+                        make_map_action_button(
                             "Cleaning",
                             on_click=lambda e: cleaning_button_click(
                                 stores, e, logger=logger
                             ),
-                            visible=cleaning_visible,
+                            visible=has_angle_map_source,
+                            enabled=cleaning_enabled,
                         ),
                         CustomReactiveText(
                             ReactiveState(
                                 lambda: str(stores.ui.map_tab.cleaning_count.get()),
                                 [stores.ui.map_tab.cleaning_count],
                             ),
-                            visible=cleaning_visible,
+                            visible=has_angle_map_source,
                         ),
                     ]
                 ),
                 ft.Row(
                     [
-                        CustomExecuteButton(
+                        make_map_action_button(
                             "Segmentation",
                             on_click=lambda e: segmentation_button_click(
                                 stores, e, logger=logger
                             ),
-                            visible=segmentation_visible,
+                            visible=has_angle_map_source,
+                            enabled=segmentation_enabled,
                         ),
                         CustomText("angle:"),
                         segmentation_angle,
@@ -500,40 +601,50 @@ class GrainTab(ft.Container):
                 ),
                 ft.Row(
                     [
-                        CustomExecuteButton(
+                        make_map_action_button(
                             "Fill boundary",
                             on_click=lambda e: fill_boundary_button_click(
                                 stores, e, logger=logger
                             ),
-                            visible=fill_visible,
+                            visible=has_angle_map_source,
+                            enabled=fill_enabled,
                         ),
                         CustomReactiveText(
                             ReactiveState(
                                 lambda: str(stores.ui.map_tab.fill_boundary_count.get()),
                                 [stores.ui.map_tab.fill_boundary_count],
                             ),
-                            visible=fill_visible,
+                            visible=has_angle_map_source,
                         ),
                     ]
                 ),
                 ft.Row(
                     [
-                        CustomExecuteButton(
+                        make_map_action_button(
                             "OK",
                             on_click=lambda e: ok_button_click(stores, e, logger=logger),
-                            visible=fill_visible,
+                            visible=has_angle_map_source,
+                            enabled=ok_enabled,
                         ),
-                        CustomExecuteButton(
-                            "Continue",
+                        make_map_action_button(
+                            "Reset",
+                            on_click=lambda e: reset_angle_map_button_click(
+                                stores, e, logger=logger
+                            ),
+                            visible=has_angle_map_source,
+                            enabled=reset_enabled,
+                        ),
+                    ]
+                ),
+                ft.Row(
+                    [
+                        make_map_action_button(
+                            "▶ Continue",
                             on_click=lambda e: continue_button_click(
                                 stores, e, logger=logger
                             ),
-                            visible=continue_visible,
-                        ),
-                        CustomExecuteButton(
-                            "Reset",
-                            on_click=lambda e: reset_angle_map_workflow(stores),
-                            visible=can_use_angle_map,
+                            visible=has_angle_map_source,
+                            enabled=continue_enabled,
                         ),
                     ]
                 ),

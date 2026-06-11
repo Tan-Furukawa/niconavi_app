@@ -91,6 +91,27 @@ def imshow_with_grain_mask(
     # !
     background_color = stores.ui.image_viewer.background_color.get()
     boundary_color = stores.ui.image_viewer.grain_boundary_color.get()
+    outside_circle_color = "black"
+
+    def apply_display_masks(image):
+        masked = apply_color_to_mask(
+            image,
+            circ_mask_used,
+            background_color,
+            vmin,
+            vmax,
+            cmap_at_2d,
+        )
+        if stores.ui.selected_index.get() == 2:
+            masked = apply_color_to_mask(
+                masked,
+                circ_mask,
+                outside_circle_color,
+                vmin,
+                vmax,
+                cmap_at_2d,
+            )
+        return masked
 
     if grain_map is not None and grain_boundary is not None:
         if stores.ui.display_grain_boundary.get():
@@ -107,36 +128,15 @@ def imshow_with_grain_mask(
                 is_log_norm=is_log_norm,
             )
 
-            _img = apply_color_to_mask(
-                _img,
-                circ_mask_used,
-                stores.ui.image_viewer.background_color.get(),
-                vmin,
-                vmax,
-                cmap_at_2d,
-            )
+            _img = apply_display_masks(_img)
             return ax.imshow(_img, cmap=cmap_at_2d, vmin=vmin, vmax=vmax, **kwargs)
         else:
-            _img = apply_color_to_mask(
-                img,
-                circ_mask_used,
-                stores.ui.image_viewer.background_color.get(),
-                vmin,
-                vmax,
-                cmap_at_2d,
-            )
+            _img = apply_display_masks(img)
 
             return ax.imshow(_img, **kwargs, vmax=vmax, vmin=vmin, cmap=cmap_at_2d)
     else:
 
-        _img = apply_color_to_mask(
-            img,
-            circ_mask_used,
-            stores.ui.image_viewer.background_color.get(),
-            vmin,
-            vmax,
-            cmap_at_2d,
-        )
+        _img = apply_display_masks(img)
 
         return ax.imshow(_img, **kwargs, vmax=vmax, vmin=vmin, cmap=cmap_at_2d)
 
