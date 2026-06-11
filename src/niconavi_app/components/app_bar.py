@@ -1,7 +1,6 @@
 import flet as ft
 from typing import Callable, Any
-import sys
-import pandas as pd
+from pathlib import Path
 import numpy as np
 from niconavi_app.stores import (
     ComputationResult,
@@ -15,6 +14,7 @@ from logging import getLogger, Logger
 from niconavi_app.reactive_state import ReactiveProgressRing, ReactiveText, ReactiveCheckbox
 from niconavi_app.state import ReactiveState
 from niconavi_app.save import (
+    collect_project_ui_state,
     save_file_result,
     save_image_as_pdf,
     save_grain_information,
@@ -52,6 +52,7 @@ from niconavi_app.components.common_component import (
 )
 from niconavi_app.components.log_view import update_logs
 from niconavi_app.download_manager import register_download
+from niconavi_app.project_io import load_project_archive, save_project_atomic
 
 
 from datetime import datetime
@@ -65,6 +66,13 @@ from niconavi_app.niconavi.grain_segmentation.grain_segmentation import (
     component_info_to_feature_matrix,
 )
 from niconavi_app.components.labeling_app.visualization import render_overlay_base64
+from niconavi_app.components.labeling_app.label_propagation import (
+    InteractiveLabelPropagation,
+)
+from niconavi_app.niconavi.angle_map_boundary import (
+    create_shock_filter_iterator,
+    make_theta_phi_angle_info,
+)
 
 
 def get_current_datetime_str() -> str:
@@ -198,21 +206,92 @@ def make_mask_checkbox(stores: Stores) -> ReactiveCheckbox:
 
 
 def load_existing_project(stores: Stores, file_path: str) -> None:
-    try:
-        r: ComputationResult = pd.read_pickle(file_path)
-    except ModuleNotFoundError as exc:
-        if "numpy._core" in str(exc):
-            ensure_numpy_core_alias()
-            r = pd.read_pickle(file_path)
-        else:
-            raise
+    project = load_project_archive(Path(file_path))
+    r = project.computation_result
     save_in_ComputationResultState(r, stores)
+    stores.ui.current_project_path.set(file_path)
     stores.ui.once_start.set(True)
+    restored_progress = infer_project_progress(r)
+    stores.ui.progress.set(restored_progress)
+    restore_map_tab_state(stores, project.ui_state)
+    switch_tab_index(stores, restored_progress)
     restore_filter_tab_view(stores)
+    restore_ui_selection(stores, project.ui_state, restored_progress)
 
     # if stores.computation_result.grain_classification_result.get() is not None:
     #     switch_tab_index(stores, 3)
     # force_update_image_view(stores)
+
+
+def infer_project_progress(result: ComputationResult) -> int:
+    if result.grain_classification_result is not None:
+        return 4
+    if result.grain_map is not None:
+        return 3
+    if result.raw_maps is not None:
+        return 2
+    if result.rotation_img is not None or result.center_int_x is not None:
+        return 1
+    if result.video_path is not None:
+        return 0
+    return 0
+
+
+def restore_map_tab_state(stores: Stores, ui_state: dict[str, Any]) -> None:
+    map_state = ui_state.get("map_tab", {}) if isinstance(ui_state, dict) else {}
+    angle_map_info = map_state.get("angle_map_info")
+
+    if angle_map_info is None:
+        raw_maps = stores.computation_result.raw_maps.get()
+        if raw_maps is not None:
+            angle_map_info = make_theta_phi_angle_info(raw_maps)
+
+    if angle_map_info is not None:
+        angle_map_display = map_state.get("angle_map_display")
+        if angle_map_display is None:
+            angle_map_display = angle_map_info.get("angle_map_display")
+        stores.ui.map_tab.angle_map_info.set(angle_map_info)
+        stores.ui.map_tab.angle_map_display.set(angle_map_display)
+        stores.ui.map_tab.shock_filter_iterator.set(
+            create_shock_filter_iterator(angle_map_info)
+        )
+    else:
+        stores.ui.map_tab.angle_map_info.set(None)
+        stores.ui.map_tab.angle_map_display.set(None)
+        stores.ui.map_tab.shock_filter_iterator.set(None)
+
+    stores.ui.map_tab.cleaning_count.set(int(map_state.get("cleaning_count", 0)))
+    stores.ui.map_tab.segmentation_angle.set(int(map_state.get("segmentation_angle", 10)))
+    stores.ui.map_tab.fill_boundary_count.set(
+        float(map_state.get("fill_boundary_count", 0.0))
+    )
+    stores.ui.map_tab.segmentation_done.set(
+        bool(map_state.get("segmentation_done", False))
+    )
+    stores.ui.map_tab.fill_boundary_started.set(
+        bool(map_state.get("fill_boundary_started", False))
+    )
+    stores.ui.map_tab.boundary_registered.set(
+        bool(map_state.get("boundary_registered", False))
+    )
+
+
+def restore_ui_selection(
+    stores: Stores,
+    ui_state: dict[str, Any],
+    fallback_progress: int,
+) -> None:
+    if not isinstance(ui_state, dict):
+        return
+    selected_index = int(ui_state.get("selected_index", fallback_progress))
+    if selected_index <= fallback_progress:
+        switch_tab_index(stores, selected_index)
+    stores.ui.selected_button_at_filter_tab.set(
+        int(ui_state.get("selected_button_at_filter_tab", 0))
+    )
+    stores.ui.selected_button_at_grain_tab.set(
+        int(ui_state.get("selected_button_at_grain_tab", 0))
+    )
 
 
 def on_result_load_project_file(
@@ -359,7 +438,43 @@ class niconaviAppBar:
 
         self.page = page
 
+        def save_project_to_current_path() -> bool:
+            current_path = stores.ui.current_project_path.get()
+            if not current_path:
+                return False
+            try:
+                save_project_atomic(
+                    Path(current_path),
+                    as_ComputationResult(stores.computation_result),
+                    ui_state=collect_project_ui_state(stores),
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Failed to save project: %s", exc)
+                update_logs(
+                    stores,
+                    ("Could not save the project.", "err"),
+                    logger=logger,
+                )
+                return True
+            update_logs(
+                stores,
+                (f"Saved project to {current_path}.", "ok"),
+                logger=logger,
+            )
+            return True
+
         def handle_save_project(_: ft.ControlEvent) -> None:
+            if page.web:
+                filename = f"output_{get_current_datetime_str()}.niconavi"
+                download_project_file(page, stores, filename, logger=logger)
+                return
+
+            if save_project_to_current_path():
+                return
+
+            handle_save_project_as(_)
+
+        def handle_save_project_as(_: ft.ControlEvent) -> None:
             filename = f"output_{get_current_datetime_str()}.niconavi"
             if page.web:
                 download_project_file(page, stores, filename, logger=logger)
@@ -410,19 +525,48 @@ class niconaviAppBar:
                     logger=logger,
                 )
 
+        def make_file_menu_item(
+            text: str,
+            on_click: Callable[[ft.ControlEvent], None],
+            icon: Any = None,
+        ) -> PopupMenuItem:
+            item = PopupMenuItem(
+                text=text,
+                icon=icon,
+                disabled=not stores.ui.computing_is_stop.get(),
+                on_click=lambda e: on_click(e)
+                if stores.ui.computing_is_stop.get()
+                else None,
+            )
+
+            def sync_disabled() -> None:
+                item.disabled = not stores.ui.computing_is_stop.get()
+                try:
+                    item.update()
+                except AssertionError:
+                    pass
+
+            stores.ui.computing_is_stop.bind(sync_disabled)
+            return item
+
         def build_menu_items() -> list[PopupMenuItem]:
             return [
-                # PopupMenuItem(text="Save project", on_click=handle_save_project),
-                # PopupMenuItem(
-                #     text="Load project",
-                #     on_click=lambda _: file_picker_load_project_file.pick_files(
-                #         allowed_extensions=["niconavi", "pkl"]
-                #     ),
-                # ),
-                PopupMenuItem(
+                make_file_menu_item(
+                    text="Save project",
+                    icon=ft.Icons.SAVE,
+                    on_click=handle_save_project,
+                ),
+                make_file_menu_item(
+                    text="Load project",
+                    icon=ft.Icons.FOLDER_OPEN,
+                    on_click=lambda _: file_picker_load_project_file.pick_files(
+                        allowed_extensions=["niconavi"]
+                    ),
+                ),
+                make_file_menu_item(
                     text="Save image as PDF", on_click=handle_save_image_as_pdf
                 ),
-                PopupMenuItem(
+                make_file_menu_item(
                     text="Save grain information as CSV", on_click=handle_save_grain
                 ),
             ]
@@ -531,6 +675,15 @@ def restore_filter_tab_view(stores: Stores) -> None:
     labeling_map.background_image.set(background_image)
     if features is not None:
         labeling_map.features.set(features)
+        clf = InteractiveLabelPropagation(
+            n_neighbors=5,
+            kernel="knn",
+            reject_threshold=0.55,
+        )
+        clf.fit_features(features)
+        stores.labeling_shared.clf.force_set(clf)
+    else:
+        stores.labeling_shared.clf.force_set(None)
 
     results = stores.computation_result.grain_classification_result.get()
     if results:
@@ -542,7 +695,8 @@ def restore_filter_tab_view(stores: Stores) -> None:
             indices = info.get("index")
             if indices is not None and len(indices) > 0:
                 max_index = max(max_index, int(np.max(indices)))
-        predictions_length = max_index + 1 if max_index >= 0 else 1
+        grain_map_max_index = int(np.max(grain_map)) if grain_map.size else 0
+        predictions_length = max(max_index, grain_map_max_index) + 1
         predictions = np.zeros(predictions_length, dtype=np.int32)
         for class_id, (label_name, info) in enumerate(ordered_items, start=1):
             label_dict[class_id] = label_name
@@ -601,29 +755,24 @@ def restore_filter_tab_view(stores: Stores) -> None:
         stores.labeling.current_class.set(None)
         stores.labeling.custom_colors.set({})
         stores.labeling.legend_entries.set([])
-        empty = np.array([], dtype=np.int32)
+        predictions_length = int(np.max(grain_map)) + 1 if grain_map.size else 1
+        empty = np.zeros(predictions_length, dtype=np.int32)
         stores.labeling.display_predictions.set(empty)
         labeling_map.predictions.set(empty)
-        stores.labeling.image_src_base64.set("")
-        stores.labeling.palette.set(["#bdbdbd"])
-        stores.labeling._loaded.set(False)
+        image_base64, palette = render_overlay_base64(
+            grain_map,
+            empty,
+            overlay_alpha=float(max(0.0, min(1.0, stores.labeling.overlay_alpha.get()))),
+            boundary_mask=boundary_mask,
+            background_image=background_image,
+            show_boundaries=stores.labeling.show_boundaries.get(),
+        )
+        stores.labeling.image_src_base64.set(image_base64)
+        stores.labeling.palette.set(list(palette))
+        stores.labeling.image_width.set(grain_map.shape[1])
+        stores.labeling.image_height.set(grain_map.shape[0])
+        stores.labeling._loaded.set(True)
         stores.labeling.user_clicked.set(False)
         stores.labeling.status_text.set("Add a label and click on the image.")
         # stores.labeling.last_action_text.set("Project loaded.")
         stores.ui.selected_button_at_filter_tab.set(0)
-
-
-def ensure_numpy_core_alias() -> None:
-    try:
-        import numpy as np
-    except Exception:
-        return
-
-    core_module = getattr(np, "core", None)
-    if core_module is None:
-        return
-
-    sys.modules.setdefault("numpy._core", core_module)
-    numeric_module = getattr(core_module, "numeric", None)
-    if numeric_module is not None:
-        sys.modules.setdefault("numpy._core.numeric", numeric_module)

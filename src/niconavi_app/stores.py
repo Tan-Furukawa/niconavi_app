@@ -288,6 +288,7 @@ class UI:
         self.once_start: State[bool] = State(False)
         self.displayed_fig: State[Optional[Figure]] = State(None)
         self.progress = State(0)
+        self.current_project_path: State[Optional[str]] = State(None)
 
 
 # ------------------------------------------------------------

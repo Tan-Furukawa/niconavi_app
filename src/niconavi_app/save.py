@@ -5,14 +5,13 @@ import binascii
 from io import BytesIO, StringIO
 import json
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
-from pandas import to_pickle
 import zipfile
 
 from niconavi_app.components.log_view import update_logs
@@ -20,7 +19,10 @@ from niconavi_app.components.log_view import update_logs
 from flet import FilePickerResultEvent
 
 from niconavi_app.stores import Stores, as_ComputationResult
-from niconavi_app.niconavi.reset_run_all import remove_heavy_objects
+from niconavi_app.project_io import (
+    export_project_bytes as export_project_archive_bytes,
+    save_project_atomic,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -33,19 +35,35 @@ GRAIN_LIST_INCLUDE_KEYS: set[str] | None = None
 GRAIN_LIST_EXCLUDE_KEYS: set[str] = {"area_shape", "exQuality"}
 
 
+def collect_project_ui_state(stores: Stores) -> dict[str, Any]:
+    map_tab = stores.ui.map_tab
+    return {
+        "selected_index": stores.ui.selected_index.get(),
+        "selected_button_at_filter_tab": stores.ui.selected_button_at_filter_tab.get(),
+        "selected_button_at_grain_tab": stores.ui.selected_button_at_grain_tab.get(),
+        "map_tab": {
+            "angle_map_info": map_tab.angle_map_info.get(),
+            "angle_map_display": map_tab.angle_map_display.get(),
+            "cleaning_count": map_tab.cleaning_count.get(),
+            "segmentation_angle": map_tab.segmentation_angle.get(),
+            "fill_boundary_count": map_tab.fill_boundary_count.get(),
+            "segmentation_done": map_tab.segmentation_done.get(),
+            "fill_boundary_started": map_tab.fill_boundary_started.get(),
+            "boundary_registered": map_tab.boundary_registered.get(),
+        },
+    }
+
+
 def save_fn(path: Path, stores: Stores) -> None:
     res = as_ComputationResult(stores.computation_result)
-    res = remove_heavy_objects(res)
-    to_pickle(res, path)
+    save_project_atomic(path, res, ui_state=collect_project_ui_state(stores))
+    stores.ui.current_project_path.set(str(path))
+    update_logs(stores, (f"Saved project to {path}.", "ok"))
 
 
 def export_project_bytes(stores: Stores) -> bytes:
     res = as_ComputationResult(stores.computation_result)
-    res = remove_heavy_objects(res)
-    buffer = BytesIO()
-    to_pickle(res, buffer)
-    buffer.seek(0)
-    return buffer.getvalue()
+    return export_project_archive_bytes(res, ui_state=collect_project_ui_state(stores))
 
 
 def save_file_result(stores: Stores) -> Callable[[FilePickerResultEvent], None]:
