@@ -29,9 +29,9 @@ def _theta_phi_to_rgb(theta: np.ndarray, phi: np.ndarray) -> np.ndarray:
     theta, phi = np.broadcast_arrays(theta, phi)
     hsv = np.stack(
         [
-            np.uint8(np.clip((np.mod(theta, 90.0) / 90.0) * 180.0, 0, 179)),
+            np.uint8(np.clip((np.mod(phi, 90.0) / 90.0) * 180.0, 0, 179)),
             np.full(theta.shape, 255, dtype=np.uint8),
-            np.uint8(np.clip((phi / 90.0) * 255.0, 0, 255)),
+            np.uint8(np.clip((theta / 90.0) * 255.0, 0, 255)),
         ],
         axis=-1,
     )
@@ -44,34 +44,51 @@ def _orientation_distance_deg(theta1: Any, phi1: Any, theta2: Any, phi2: Any) ->
     phi1 = np.asarray(phi1, dtype=np.float64)
     theta2 = np.asarray(theta2, dtype=np.float64)
     phi2 = np.asarray(phi2, dtype=np.float64)
-    d_theta = np.abs(theta1 - theta2)
-    d_theta = np.minimum(d_theta, 90.0 - d_theta)
-    phi1_rad = np.deg2rad(phi1)
-    phi2_rad = np.deg2rad(phi2)
-    d_theta_rad = np.deg2rad(d_theta)
+    d_phi = np.abs(phi1 - phi2)
+    d_phi = np.minimum(d_phi, 90.0 - d_phi)
+    theta1_rad = np.deg2rad(theta1)
+    theta2_rad = np.deg2rad(theta2)
+    d_phi_rad = np.deg2rad(d_phi)
     cos_angle = (
-        np.cos(phi1_rad) * np.cos(phi2_rad)
-        + np.sin(phi1_rad) * np.sin(phi2_rad) * np.cos(d_theta_rad)
+        np.cos(theta1_rad) * np.cos(theta2_rad)
+        + np.sin(theta1_rad) * np.sin(theta2_rad) * np.cos(d_phi_rad)
     )
     angle = np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
     return float(angle) if angle.ndim == 0 else angle
 
 
 def _orientation_vectors(theta: np.ndarray, phi: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    theta4 = np.deg2rad(4.0 * np.asarray(theta, dtype=np.float64))
-    phi_rad = np.deg2rad(np.asarray(phi, dtype=np.float64))
-    sin_phi = np.sin(phi_rad)
-    return sin_phi * np.cos(theta4), sin_phi * np.sin(theta4), np.cos(phi_rad)
+    phi4 = np.deg2rad(4.0 * np.asarray(phi, dtype=np.float64))
+    theta_rad = np.deg2rad(np.asarray(theta, dtype=np.float64))
+    sin_theta = np.sin(theta_rad)
+    return sin_theta * np.cos(phi4), sin_theta * np.sin(phi4), np.cos(theta_rad)
 
 
 def _orientation_from_vectors(
     x: np.ndarray, y: np.ndarray, z: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     xy = np.hypot(x, y)
-    theta = (np.degrees(np.arctan2(y, x)) % 360.0) / 4.0
-    theta = np.where(xy <= 1e-12, 0.0, theta)
-    phi = np.degrees(np.arctan2(xy, z))
-    return theta, np.clip(phi, 0.0, 90.0)
+    phi = (np.degrees(np.arctan2(y, x)) % 360.0) / 4.0
+    phi = np.where(xy <= 1e-12, 0.0, phi)
+    theta = np.degrees(np.arctan2(xy, z))
+    return np.clip(theta, 0.0, 90.0), phi
+
+
+def _make_theta_from_dark_bright(
+    darkest_rgb: np.ndarray,
+    brightest_rgb: np.ndarray,
+    *,
+    bright_percentile: float = 99.5,
+    eps: float = 1e-6,
+) -> np.ndarray:
+    darkest_gray = _to_gray_float(darkest_rgb)
+    brightest_gray = _to_gray_float(brightest_rgb)
+    bright_ref = np.percentile(brightest_gray, bright_percentile)
+    intensity_ratio = (brightest_gray - darkest_gray) / np.maximum(bright_ref - darkest_gray, eps)
+    intensity_ratio = np.clip(intensity_ratio, 0.0, 1.0)
+
+    theta_acute = 0.5 * np.degrees(np.arcsin(np.sqrt(intensity_ratio)))
+    return 2.0 * theta_acute
 
 
 def _region_median_color_map(rgb: np.ndarray, labels: np.ndarray) -> np.ndarray:
@@ -107,13 +124,13 @@ def _split_connected_components(labels: np.ndarray) -> np.ndarray:
 
 
 def make_theta_phi_angle_info(raw_maps: RawMaps) -> dict[str, Any]:
-    theta = np.asarray(raw_maps["extinction_angle"], dtype=np.float64)
+    phi = np.asarray(raw_maps["extinction_angle"], dtype=np.float64)
     brightest = _as_uint8_rgb(raw_maps["R_color_map"])
     darkest = _as_uint8_rgb(raw_maps["extinction_color_map"])
-    dark_gray = _to_gray_float(darkest)
-    bright_gray = _to_gray_float(brightest)
-    bright_ref = np.percentile(bright_gray, 99.5)
-    phi = 90.0 * np.clip((bright_gray - dark_gray) / np.maximum(bright_ref - dark_gray, 1e-6), 0.0, 1.0)
+    theta = _make_theta_from_dark_bright(
+        darkest,
+        brightest,
+    )
     angle_map = _theta_phi_to_rgb(theta, phi)
     return {
         "theta": theta,
