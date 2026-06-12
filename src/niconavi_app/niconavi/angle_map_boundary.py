@@ -74,6 +74,108 @@ def _orientation_from_vectors(
     return np.clip(theta, 0.0, 90.0), phi
 
 
+def _draw_unicode_label(
+    image: np.ndarray,
+    text: str,
+    position: tuple[int, int],
+    *,
+    font_size: int,
+    color: tuple[int, int, int],
+) -> None:
+    from PIL import Image, ImageDraw, ImageFont
+
+    try:
+        font = ImageFont.truetype("DejaVuSans.ttf", font_size)
+    except OSError:
+        font = ImageFont.load_default()
+
+    pil_image = Image.fromarray(image)
+    draw = ImageDraw.Draw(pil_image)
+    draw.text(position, text, fill=color, font=font)
+    image[:] = np.asarray(pil_image)
+
+
+def make_theta_phi_legend_image(size: int = 320) -> np.ndarray:
+    size = int(size)
+    margin = max(36, int(size * 0.14))
+    radius = max(1, size - margin * 2)
+    origin_x = margin
+    origin_y = size - margin
+    yy, xx = np.indices((size, size))
+    dx = xx - origin_x
+    dy = origin_y - yy
+    rr = np.hypot(dx, dy)
+    inside = (dx >= 0) & (dy >= 0) & (rr <= radius)
+
+    legend = np.full((size, size, 3), 48, dtype=np.uint8)
+    theta = (rr / radius) * 90.0
+    phi = np.degrees(np.arctan2(dy, dx))
+    legend[inside] = _theta_phi_to_rgb(theta[inside], phi[inside])
+
+    grid_color = (235, 235, 235)
+    label_color = (255, 255, 255)
+    inner_grid_radius = int(round(radius * 10.0 / 90.0))
+    for angle in range(0, 91, 10):
+        rad = np.deg2rad(angle)
+        start_radius = 0 if angle in (0, 90) else inner_grid_radius
+        start = (
+            int(round(origin_x + start_radius * np.cos(rad))),
+            int(round(origin_y - start_radius * np.sin(rad))),
+        )
+        end = (
+            int(round(origin_x + radius * np.cos(rad))),
+            int(round(origin_y - radius * np.sin(rad))),
+        )
+        cv2.line(legend, start, end, grid_color, 1, cv2.LINE_AA)
+
+    for theta_deg in range(10, 91, 10):
+        r = int(round(radius * theta_deg / 90.0))
+        cv2.ellipse(legend, (origin_x, origin_y), (r, r), 0, 270, 360, grid_color, 1, cv2.LINE_AA)
+        label_x = int(round(origin_x + r))
+        cv2.putText(
+            legend,
+            str(theta_deg),
+            (label_x - 8, origin_y + 20),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            label_color,
+            1,
+            cv2.LINE_AA,
+        )
+
+    for angle in range(0, 91, 10):
+        rad = np.deg2rad(angle)
+        label_r = radius + 18
+        label_x = int(round(origin_x + label_r * np.cos(rad)))
+        label_y = int(round(origin_y - label_r * np.sin(rad)))
+        cv2.putText(
+            legend,
+            str(angle),
+            (label_x - 8, label_y + 4),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            label_color,
+            1,
+            cv2.LINE_AA,
+        )
+
+    _draw_unicode_label(
+        legend,
+        "θ",
+        (origin_x + radius // 2 - 8, origin_y + 24),
+        font_size=16,
+        color=label_color,
+    )
+    _draw_unicode_label(
+        legend,
+        "φ",
+        (origin_x + radius - 18, origin_y - radius // 2 - 54),
+        font_size=16,
+        color=label_color,
+    )
+    return legend
+
+
 def _make_theta_from_dark_bright(
     darkest_rgb: np.ndarray,
     brightest_rgb: np.ndarray,

@@ -30,7 +30,7 @@ from niconavi_app.components.common_component import (
     CustomRadio,
     CustomReactiveCheckbox,
 )
-from niconavi_app.tools.tools import switch_tab_index
+from niconavi_app.tools.tools import convert_RGBPicture_to_src_base64, switch_tab_index
 from niconavi_app.components.log_view import update_logs
 from niconavi_app.components.page_tab.tabs.reset_onclick import (
     reset_onclick_grain_boundary_button,
@@ -61,6 +61,7 @@ from niconavi_app.niconavi.angle_map_boundary import (
     fill_dark_boundaries,
     grain_boundary_from_angle_labels,
     make_theta_phi_angle_info,
+    make_theta_phi_legend_image,
     segment_angle_map,
 )
 from niconavi_app.niconavi.tools.str_parser import (
@@ -571,9 +572,34 @@ class GrainTab(ft.Container):
             lambda: can_use_angle_map.get(),
             [can_use_angle_map],
         )
+        angle_map_legend_visible = ReactiveState(
+            lambda: stores.ui.selected_button_at_grain_tab.get() == 21
+            and stores.ui.map_tab.angle_map_display.get() is not None,
+            [
+                stores.ui.selected_button_at_grain_tab,
+                stores.ui.map_tab.angle_map_display,
+            ],
+        )
+        angle_map_legend_src = convert_RGBPicture_to_src_base64(
+            RGBPicture(make_theta_phi_legend_image(size=320))
+        )
+        angle_map_legend = ReactiveColumn(
+            [
+                ft.Image(
+                    src_base64=angle_map_legend_src or "",
+                    width=240,
+                    height=240,
+                    fit=ft.ImageFit.CONTAIN,
+                ),
+            ],
+            visible=angle_map_legend_visible,
+            spacing=4,
+            horizontal_alignment=ft.CrossAxisAlignment.START,
+        )
 
         content = ft.Column(
             [
+                angle_map_legend,
                 CustomText("Clean the angle map before segmentation."),
                 ft.Row(
                     [
