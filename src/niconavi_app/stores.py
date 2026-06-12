@@ -578,4 +578,3 @@ def as_ComputationResult(param: ComputationResultState) -> ComputationResult:
             raise ValueError("unexpected type occurred in ComputationResultState")
 
     return ComputationResult(**res_dict)
-

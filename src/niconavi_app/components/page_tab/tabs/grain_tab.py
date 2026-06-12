@@ -604,7 +604,7 @@ class GrainTab(ft.Container):
                 ft.Row(
                     [
                         make_map_action_button(
-                            "Cleaning",
+                            "Clean",
                             on_click=lambda e: cleaning_button_click(
                                 stores, e, logger=logger
                             ),
