@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 
 from niconavi_app.niconavi.type import RawMaps
+from niconavi_app.niconavi.image.image import create_outside_circle_mask
 from niconavi_app.niconavi.tools.grain_plot import detect_boundaries
 
 
@@ -225,6 +226,31 @@ def _split_connected_components(labels: np.ndarray) -> np.ndarray:
     return out
 
 
+def _split_labels_by_mask(labels: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    labels = _compact_labels(labels)
+    mask = np.asarray(mask, dtype=bool)
+    if labels.shape != mask.shape:
+        raise ValueError("labels and mask must have the same shape.")
+
+    flat_labels = labels.reshape(-1)
+    flat_mask = mask.reshape(-1)
+    n_labels = int(flat_labels.max()) + 1
+    counts = np.bincount(flat_labels, minlength=n_labels)
+    mask_counts = np.bincount(flat_labels, weights=flat_mask.astype(np.float64), minlength=n_labels)
+    crossing_labels = np.flatnonzero((mask_counts > 0) & (mask_counts < counts))
+
+    if crossing_labels.size == 0:
+        return labels
+
+    out = labels.copy()
+    next_label = n_labels
+    for label in crossing_labels:
+        out[(labels == label) & mask] = next_label
+        next_label += 1
+
+    return _compact_labels(out)
+
+
 def make_theta_phi_angle_info(raw_maps: RawMaps) -> dict[str, Any]:
     phi = np.asarray(raw_maps["extinction_angle"], dtype=np.float64)
     brightest = _as_uint8_rgb(raw_maps["R_color_map"])
@@ -347,6 +373,7 @@ def segment_angle_map(
     slic_min_element_size: int = 25,
 ) -> dict[str, Any]:
     source = _as_uint8_rgb(theta_phi_angle_info.get("shock_angle_map", theta_phi_angle_info["theta_phi_angle_map"]))
+    outside_circle_mask = create_outside_circle_mask(source)
     superpixel_labels = _make_superpixel_labels(
         source,
         slic_region_size=slic_region_size,
@@ -354,6 +381,7 @@ def segment_angle_map(
         slic_num_iterations=slic_num_iterations,
         slic_min_element_size=slic_min_element_size,
     )
+    superpixel_labels = _split_labels_by_mask(superpixel_labels, outside_circle_mask)
     superpixel_median_map = _region_median_color_map(source, superpixel_labels)
     theta = np.asarray(theta_phi_angle_info["theta"], dtype=np.float64)
     phi = np.asarray(theta_phi_angle_info["phi"], dtype=np.float64)
@@ -365,6 +393,12 @@ def segment_angle_map(
     mean_y = np.bincount(flat_labels, weights=y, minlength=n_labels) / np.maximum(counts, 1.0)
     mean_z = np.bincount(flat_labels, weights=z, minlength=n_labels) / np.maximum(counts, 1.0)
     region_theta, region_phi = _orientation_from_vectors(mean_x, mean_y, mean_z)
+    outside_counts = np.bincount(
+        flat_labels,
+        weights=outside_circle_mask.reshape(-1).astype(np.float64),
+        minlength=n_labels,
+    )
+    is_outside_label = outside_counts > 0
     parent = np.arange(n_labels, dtype=np.int32)
 
     def find(label: int) -> int:
@@ -382,6 +416,8 @@ def segment_angle_map(
     for left, right in ((superpixel_labels[:, :-1], superpixel_labels[:, 1:]), (superpixel_labels[:-1, :], superpixel_labels[1:, :])):
         diff = left != right
         for a, b in zip(left[diff], right[diff]):
+            if is_outside_label[a] != is_outside_label[b]:
+                continue
             if _orientation_distance_deg(region_theta[a], region_phi[a], region_theta[b], region_phi[b]) <= delta_euler_thresh:
                 union(int(a), int(b))
 
