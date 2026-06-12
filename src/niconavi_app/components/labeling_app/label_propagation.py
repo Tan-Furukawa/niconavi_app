@@ -31,6 +31,7 @@ class InteractiveLabelPropagation:
         self.prototype_weight = prototype_weight
 
         self.X_: Optional[np.ndarray] = None  # (N, d) 生特徴
+        self.feature_weights_: Optional[np.ndarray] = None
         self.scaler_ = None
         self.Z_: Optional[np.ndarray] = None  # (N, d) スケール後
         self.y_user_: Optional[np.ndarray] = None  # (N,) 学習用。未ラベルは -1
@@ -42,18 +43,37 @@ class InteractiveLabelPropagation:
         self.proba_classes_: Optional[np.ndarray] = None
 
     # -------------------- データ/特徴 --------------------
-    def fit_features(self, X: np.ndarray) -> None:
+    def fit_features(
+        self,
+        X: np.ndarray,
+        feature_weights: Optional[np.ndarray] = None,
+    ) -> None:
         """
         X: (N, d) 特徴行列（例: [logA, C, solidity, aspect_ratio, Lab(a), Lab(b), HSV(S)])
         """
         if X.ndim != 2:
             raise ValueError("X must be 2D array.")
         self.X_ = X.astype(np.float64, copy=True)
+        if feature_weights is None:
+            weights = np.ones(X.shape[1], dtype=np.float64)
+            if weights.size >= 9:
+                weights[-2:] = float(self.position_weight)
+        else:
+            weights = np.asarray(feature_weights, dtype=np.float64)
+            if weights.ndim != 1 or weights.size != X.shape[1]:
+                raise ValueError("feature_weights must match the feature columns.")
+        selected = weights > 0
+        if not np.any(selected):
+            selected = np.ones(X.shape[1], dtype=bool)
+            weights = np.ones(X.shape[1], dtype=np.float64)
+            if weights.size >= 9:
+                weights[-2:] = float(self.position_weight)
+        self.feature_weights_ = weights.copy()
+        weighted_x = self.X_[:, selected]
         Scaler = RobustScaler if self.use_robust_scaler else StandardScaler
-        self.scaler_ = Scaler().fit(self.X_)
-        self.Z_ = self.scaler_.transform(self.X_)
-        if self.Z_.shape[1] >= 9:
-            self.Z_[:, -2:] *= float(self.position_weight)
+        self.scaler_ = Scaler().fit(weighted_x)
+        self.Z_ = self.scaler_.transform(weighted_x)
+        self.Z_ *= weights[selected]
         N = self.Z_.shape[0]
         # 最初はすべて未ラベル（-1）。推論の既定値は後段で 0 とする
         self.y_user_ = np.full(N, -1, dtype=int)

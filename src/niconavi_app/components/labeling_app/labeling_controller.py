@@ -27,6 +27,11 @@ from niconavi_app.niconavi.type import (
 )
 
 INITIAL_LABELS: Dict[int, int] = {}
+FEATURE_COLUMNS: Dict[str, tuple[int, ...]] = {
+    "shape": (0, 1, 2, 3),
+    "color": (4, 5, 6),
+    "position": (7, 8),
+}
 
 
 def add_minera_name_to_grain_list(
@@ -260,6 +265,25 @@ class LabelingController:
         self.labeling.show_training_boxes.set(show)
         if self.labeling._loaded.get():
             self.refresh_visuals(update_stats=False)
+
+    def handle_feature_checkbox_change(self, feature_name: str, e) -> None:
+        state = getattr(self.labeling, f"use_{feature_name}_features")
+        state.set(bool(getattr(e.control, "value", True)))
+
+        if not (
+            self.labeling.use_color_features.get()
+            or self.labeling.use_shape_features.get()
+            or self.labeling.use_position_features.get()
+        ):
+            state.set(True)
+            update_logs(
+                self.stores,
+                ("At least one feature group must be enabled.", "warn"),
+            )
+            return
+
+        if self.labeling._loaded.get():
+            self.rebuild_classifier_from_current_features()
 
     def on_image_tap(self, e) -> None:
         if not self.labeling._loaded.get():
@@ -499,14 +523,10 @@ class LabelingController:
         self._set_labeling_param("background_image", background_image)
         self._set_labeling_param("features", features)
 
-        self.clf = InteractiveLabelPropagation(
-            n_neighbors=5,
-            kernel="knn",
-            reject_threshold=0.55,
-        )
+        self.clf = self._make_classifier()
         if features is None:
             raise RuntimeError("features failed to load")
-        self.clf.fit_features(features)
+        self.clf.fit_features(features, feature_weights=self._feature_weights(features))
         for idx, cls in INITIAL_LABELS.items():
             self.clf.set_label(idx, class_id=cls)
         self.clf.propagate()
@@ -544,6 +564,49 @@ class LabelingController:
         self.labeling.image_height.set(height)
         self.labeling.image_src_base64.set("")
         self.update_display_dimensions()
+
+    def _make_classifier(self) -> InteractiveLabelPropagation:
+        return InteractiveLabelPropagation(
+            n_neighbors=5,
+            kernel="knn",
+            reject_threshold=0.55,
+        )
+
+    def _feature_weights(self, features: np.ndarray) -> np.ndarray:
+        weights = np.zeros(features.shape[1], dtype=np.float64)
+        if self.labeling.use_shape_features.get():
+            weights[list(FEATURE_COLUMNS["shape"])] = 1.0
+        if self.labeling.use_color_features.get():
+            weights[list(FEATURE_COLUMNS["color"])] = 1.0
+        if self.labeling.use_position_features.get():
+            weights[list(FEATURE_COLUMNS["position"])] = 0.2
+        if not np.any(weights):
+            weights[:] = 1.0
+            if weights.size >= 9:
+                weights[-2:] = 0.2
+        return weights
+
+    def rebuild_classifier_from_current_features(self) -> None:
+        features = self.labeling_map.features.get()
+        if features is None:
+            return
+        old_clf = self.clf
+        new_clf = self._make_classifier()
+        new_clf.fit_features(features, feature_weights=self._feature_weights(features))
+        if old_clf is not None and old_clf.y_user_ is not None:
+            copy_len = min(old_clf.y_user_.size, new_clf.y_user_.size)
+            new_clf.y_user_[:copy_len] = old_clf.y_user_[:copy_len]
+            new_clf.classes_in_use_ = sorted(
+                int(class_id)
+                for class_id in np.unique(new_clf.y_user_[new_clf.y_user_ > 0])
+            )
+        self.clf = new_clf
+        self.clf.propagate()
+        self._set_labeling_param("predictions", self.clf.current_predictions())
+        self._set_labeling_param("probabilities", self.clf.current_probabilities())
+        self.labeling.display_predictions.set(self._compute_display_predictions())
+        self.labeling._clicked_indices_cache.set(None)
+        self.refresh_visuals(update_stats=True)
 
     def refresh_visuals(self, update_stats: bool = False) -> None:
         if not self.labeling._loaded.get():

@@ -66,9 +66,6 @@ from niconavi_app.niconavi.grain_segmentation.grain_segmentation import (
     component_info_to_feature_matrix,
 )
 from niconavi_app.components.labeling_app.visualization import render_overlay_base64
-from niconavi_app.components.labeling_app.label_propagation import (
-    InteractiveLabelPropagation,
-)
 from niconavi_app.niconavi.angle_map_boundary import (
     create_shock_filter_iterator,
     make_theta_phi_angle_info,
@@ -214,6 +211,7 @@ def load_existing_project(stores: Stores, file_path: str) -> None:
     restored_progress = infer_project_progress(r)
     stores.ui.progress.set(restored_progress)
     restore_map_tab_state(stores, project.ui_state)
+    restore_labeling_feature_state(stores, project.ui_state)
     switch_tab_index(stores, restored_progress)
     restore_filter_tab_view(stores)
     restore_ui_selection(stores, project.ui_state, restored_progress)
@@ -291,6 +289,19 @@ def restore_ui_selection(
     )
     stores.ui.selected_button_at_grain_tab.set(
         int(ui_state.get("selected_button_at_grain_tab", 0))
+    )
+
+
+def restore_labeling_feature_state(stores: Stores, ui_state: dict[str, Any]) -> None:
+    labeling_state = ui_state.get("labeling", {}) if isinstance(ui_state, dict) else {}
+    stores.labeling.use_color_features.set(
+        bool(labeling_state.get("use_color_features", True))
+    )
+    stores.labeling.use_shape_features.set(
+        bool(labeling_state.get("use_shape_features", True))
+    )
+    stores.labeling.use_position_features.set(
+        bool(labeling_state.get("use_position_features", True))
     )
 
 
@@ -675,13 +686,8 @@ def restore_filter_tab_view(stores: Stores) -> None:
     labeling_map.background_image.set(background_image)
     if features is not None:
         labeling_map.features.set(features)
-        clf = InteractiveLabelPropagation(
-            n_neighbors=5,
-            kernel="knn",
-            reject_threshold=0.55,
-        )
-        clf.fit_features(features)
-        stores.labeling_shared.clf.force_set(clf)
+        controller = LabelingController(stores=stores)
+        controller.rebuild_classifier_from_current_features()
     else:
         stores.labeling_shared.clf.force_set(None)
 

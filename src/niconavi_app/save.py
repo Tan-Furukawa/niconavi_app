@@ -41,6 +41,11 @@ def collect_project_ui_state(stores: Stores) -> dict[str, Any]:
         "selected_index": stores.ui.selected_index.get(),
         "selected_button_at_filter_tab": stores.ui.selected_button_at_filter_tab.get(),
         "selected_button_at_grain_tab": stores.ui.selected_button_at_grain_tab.get(),
+        "labeling": {
+            "use_color_features": stores.labeling.use_color_features.get(),
+            "use_shape_features": stores.labeling.use_shape_features.get(),
+            "use_position_features": stores.labeling.use_position_features.get(),
+        },
         "map_tab": {
             "angle_map_info": map_tab.angle_map_info.get(),
             "angle_map_display": map_tab.angle_map_display.get(),

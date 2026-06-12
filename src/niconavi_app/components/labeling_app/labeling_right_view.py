@@ -100,6 +100,73 @@ def create_labeling_right_container(
     labeling.show_training_boxes.bind(sync_training_checkbox)
     labeling._loaded.bind(sync_training_checkbox_enabled)
 
+    def make_feature_checkbox(feature_name: str, label: str) -> ft.Checkbox:
+        state = getattr(labeling, f"use_{feature_name}_features")
+        checkbox = ft.Checkbox(
+            label=ft.Text(label, color=ft.Colors.WHITE),
+            value=state.get(),
+            on_change=lambda e: controller.handle_feature_checkbox_change(
+                feature_name, e
+            ),
+            fill_color=ft.Colors.BLUE_100,
+            check_color=ft.Colors.BLACK,
+        )
+
+        def sync_checkbox() -> None:
+            checkbox.value = state.get()
+            _maybe_update(checkbox)
+
+        def sync_checkbox_enabled() -> None:
+            checkbox.disabled = not labeling._loaded.get()
+            _maybe_update(checkbox)
+
+        state.bind(sync_checkbox)
+        labeling._loaded.bind(sync_checkbox_enabled)
+        sync_checkbox()
+        sync_checkbox_enabled()
+        return checkbox
+
+    feature_checkbox_row = ft.Row(
+        controls=[
+            make_feature_checkbox("color", "Color"),
+            make_feature_checkbox("shape", "Shape"),
+            make_feature_checkbox("position", "Position"),
+        ],
+        wrap=True,
+        spacing=0,
+        run_spacing=0,
+        visible=False,
+    )
+    feature_toggle_icon = ft.IconButton(
+        icon=ft.Icons.ADD,
+        icon_color=ft.Colors.BLUE_100,
+        tooltip="Feature settings",
+    )
+
+    def toggle_feature_controls(_e) -> None:
+        feature_checkbox_row.visible = not feature_checkbox_row.visible
+        feature_toggle_icon.icon = (
+            ft.Icons.REMOVE if feature_checkbox_row.visible else ft.Icons.ADD
+        )
+        _maybe_update(feature_checkbox_row)
+        _maybe_update(feature_toggle_icon)
+
+    feature_toggle_icon.on_click = toggle_feature_controls
+    feature_controls = ft.Column(
+        controls=[
+            ft.Row(
+                controls=[
+                    ft.Text("Features", color=TEXT_COLOR, weight=ft.FontWeight.BOLD),
+                    feature_toggle_icon,
+                ],
+                spacing=4,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            feature_checkbox_row,
+        ],
+        spacing=0,
+    )
+
     overlay_value_text = ft.Text(
         value=f"Overlay opacity: {labeling.overlay_alpha.get():.2f}",
         color=TEXT_COLOR,
@@ -201,6 +268,7 @@ def create_labeling_right_container(
             status_text,
             boundary_checkbox,
             training_checkbox,
+            feature_controls,
             overlay_controls,
             label_selection_container,
             ft.Divider(color=TEXT_COLOR),

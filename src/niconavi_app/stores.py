@@ -118,6 +118,9 @@ class Labeling:
         self.legend_entries: State[list[dict[str, str]]] = State([])
         self.show_boundaries: State[bool] = State(True)
         self.show_training_boxes: State[bool] = State(True)
+        self.use_color_features: State[bool] = State(True)
+        self.use_shape_features: State[bool] = State(True)
+        self.use_position_features: State[bool] = State(True)
         self.custom_colors: State[dict[int, str]] = State({})
         self.overlay_alpha: State[float] = State(0.65)
         self.image_src_base64: State[str] = State("")
@@ -575,5 +578,4 @@ def as_ComputationResult(param: ComputationResultState) -> ComputationResult:
             raise ValueError("unexpected type occurred in ComputationResultState")
 
     return ComputationResult(**res_dict)
-
 
