@@ -21,7 +21,7 @@ class ReactiveElevatedButtonInSelector(ReactiveElevatedButton):
         bgcolor: StateProperty[Optional[str]] = None,
         **kwargs: Any
     ) -> None:
-        super().__init__(text, visible, bgcolor, **kwargs)
+        super().__init__(text=text, visible=visible, bgcolor=bgcolor, **kwargs)
         # self.border_radius = 0
         # self.bgcolor = bgcolor
         # self.height = 30
@@ -29,6 +29,10 @@ class ReactiveElevatedButtonInSelector(ReactiveElevatedButton):
         self.width = 280
         self.style = ft.ButtonStyle(
             shape=ft.ContinuousRectangleBorder(radius=3),
+            overlay_color={
+                ft.ControlState.HOVERED: ft.Colors.WHITE24,
+                ft.ControlState.DISABLED: ft.Colors.TRANSPARENT,
+            },
         )
 
 

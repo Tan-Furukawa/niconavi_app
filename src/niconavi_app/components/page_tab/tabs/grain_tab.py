@@ -387,13 +387,12 @@ def reset_angle_map_button_click(
 def make_map_action_button(
     text: str,
     *,
-    visible: ReactiveState[bool],
     enabled: ReactiveState[bool],
     on_click: Callable[[ft.ControlEvent], None],
 ) -> ReactiveElevatedButton:
     button = ReactiveElevatedButton(
         text,
-        visible=visible,
+        enabled=enabled,
         bgcolor=ReactiveState(
             lambda: (
                 ft.Colors.LIGHT_GREEN_700
@@ -407,7 +406,13 @@ def make_map_action_button(
     button.height = 30
     button.content_padding = ft.padding.only(left=10, top=3, bottom=3)
     button.color = ft.Colors.WHITE
-    button.style = ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=5))
+    button.style = ft.ButtonStyle(
+        shape=ft.RoundedRectangleBorder(radius=5),
+        overlay_color={
+            ft.ControlState.HOVERED: ft.Colors.WHITE24,
+            ft.ControlState.DISABLED: ft.Colors.TRANSPARENT,
+        },
+    )
     return button
 
 
@@ -419,7 +424,7 @@ def make_execute_grain_boundary_calc_button(
         on_click=lambda e: execute_grain_boundary_calc_button_click(
             stores, e, logger=logger
         ),
-        visible=ReactiveState(
+        enabled=ReactiveState(
             lambda: (
                 stores.ui.computing_is_stop.get()
                 and stores.computation_result.raw_maps.get() is not None
@@ -440,7 +445,7 @@ def make_edit_button_visible(
     edit_button = ReactiveElevatedButton(
         "Edit",
         on_click=lambda e: edit_button_click(stores, e, logger=logger),
-        visible=ReactiveState(
+        enabled=ReactiveState(
             lambda: (stores.ui.computing_is_stop.get() and edit_button_visible.get()),
             [stores.ui.computing_is_stop, edit_button_visible],
         ),
@@ -460,7 +465,7 @@ def make_continue_button_visible(
 
     continue_button = CustomExecuteButton(
         "▶ Continue",
-        visible=continue_button_visible,
+        enabled=continue_button_visible,
         on_click=lambda e: continue_button_click(stores, e, logger=logger),
     )
     return continue_button
@@ -569,6 +574,7 @@ class GrainTab(ft.Container):
 
         content = ft.Column(
             [
+                CustomText("Clean the angle map before segmentation."),
                 ft.Row(
                     [
                         make_map_action_button(
@@ -576,7 +582,6 @@ class GrainTab(ft.Container):
                             on_click=lambda e: cleaning_button_click(
                                 stores, e, logger=logger
                             ),
-                            visible=has_angle_map_source,
                             enabled=cleaning_enabled,
                         ),
                         CustomReactiveText(
@@ -588,6 +593,7 @@ class GrainTab(ft.Container):
                         ),
                     ]
                 ),
+                CustomText("Segment similar angle regions into grains."),
                 ft.Row(
                     [
                         make_map_action_button(
@@ -595,13 +601,13 @@ class GrainTab(ft.Container):
                             on_click=lambda e: segmentation_button_click(
                                 stores, e, logger=logger
                             ),
-                            visible=has_angle_map_source,
                             enabled=segmentation_enabled,
                         ),
                         CustomText("angle:"),
                         segmentation_angle,
                     ]
                 ),
+                CustomText("Fill thin dark boundaries after segmentation."),
                 ft.Row(
                     [
                         make_map_action_button(
@@ -609,7 +615,6 @@ class GrainTab(ft.Container):
                             on_click=lambda e: fill_boundary_button_click(
                                 stores, e, logger=logger
                             ),
-                            visible=has_angle_map_source,
                             enabled=fill_enabled,
                         ),
                         CustomReactiveText(
@@ -621,12 +626,12 @@ class GrainTab(ft.Container):
                         ),
                     ]
                 ),
+                CustomText("Register or reset the map-based grain boundary."),
                 ft.Row(
                     [
                         make_map_action_button(
                             "OK",
                             on_click=lambda e: ok_button_click(stores, e, logger=logger),
-                            visible=has_angle_map_source,
                             enabled=ok_enabled,
                         ),
                         make_map_action_button(
@@ -634,11 +639,11 @@ class GrainTab(ft.Container):
                             on_click=lambda e: reset_angle_map_button_click(
                                 stores, e, logger=logger
                             ),
-                            visible=has_angle_map_source,
                             enabled=reset_enabled,
                         ),
                     ]
                 ),
+                CustomText("Continue to filter labeling after registering boundaries."),
                 ft.Row(
                     [
                         make_map_action_button(
@@ -646,7 +651,6 @@ class GrainTab(ft.Container):
                             on_click=lambda e: continue_button_click(
                                 stores, e, logger=logger
                             ),
-                            visible=has_angle_map_source,
                             enabled=continue_enabled,
                         ),
                     ]

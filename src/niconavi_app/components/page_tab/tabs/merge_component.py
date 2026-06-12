@@ -114,6 +114,7 @@ def make_merge_button(stores: Stores, *, logger: Logger) -> ReactiveElevatedButt
     merge_button = ReactiveElevatedButton(
         "Merge",
         on_click=lambda e: merge_button_click(stores, e, logger=logger),
+        enabled=stores.ui.computing_is_stop,
     )
     return merge_button
 
@@ -121,7 +122,7 @@ def make_merge_button(stores: Stores, *, logger: Logger) -> ReactiveElevatedButt
 def make_continue_button(stores: Stores, *, logger: Logger) -> ReactiveElevatedButton:
     continue_button = ReactiveElevatedButton(
         "Continue",
-        visible=True,
+        enabled=stores.ui.computing_is_stop,
         on_click=lambda e: continue_button_click(stores, e, logger=logger),
     )
     return continue_button
@@ -131,6 +132,7 @@ def make_reset_button(stores: Stores, *, logger: Logger) -> ReactiveElevatedButt
     reset_button = ReactiveElevatedButton(
         "Reset",
         on_click=lambda e: reset_button_click(stores, e, logger=logger),
+        enabled=stores.ui.computing_is_stop,
     )
     return reset_button
 

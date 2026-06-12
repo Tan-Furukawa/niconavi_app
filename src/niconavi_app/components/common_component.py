@@ -7,7 +7,7 @@ from niconavi_app.reactive_state import (
     ReactiveText,
     ReactiveRow,
 )
-from niconavi_app.state import StateProperty, ReactiveState, State
+from niconavi_app.state import StateProperty, ReactiveState, State, get_prop_value
 import threading
 
 
@@ -25,6 +25,32 @@ class CustomText(ft.Text):
     def __init__(self, value: str, **kwargs: Any) -> None:
         super().__init__(value, **kwargs)
         self.color = ft.Colors.WHITE
+
+
+def confirm_action(
+    page: ft.Page,
+    title: str,
+    message: str,
+    on_confirm: Callable[[], None],
+) -> None:
+    def handle_cancel(e: ft.ControlEvent) -> None:
+        page.close(dialog)
+
+    def handle_confirm(e: ft.ControlEvent) -> None:
+        page.close(dialog)
+        on_confirm()
+
+    dialog = ft.AlertDialog(
+        modal=True,
+        title=CustomText(title),
+        content=CustomText(message),
+        actions=[
+            ft.TextButton("Cancel", on_click=handle_cancel),
+            ft.TextButton("Continue", on_click=handle_confirm),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.open(dialog)
 
 
 class CustomReactiveText(ReactiveText):
@@ -147,16 +173,37 @@ class CustomExecuteButton(ReactiveElevatedButton):
         self,
         text: StateProperty[str],
         visible: StateProperty[bool] = True,
+        enabled: StateProperty[bool] = True,
         bgcolor: str = ft.Colors.LIGHT_GREEN_700,
         **kwargs: Any
     ) -> None:
-        super().__init__(visible=visible, text=text, **kwargs)
+        if isinstance(enabled, (State, ReactiveState)):
+            button_bgcolor: StateProperty[Optional[str]] = ReactiveState(
+                lambda: (
+                    bgcolor
+                    if get_prop_value(enabled)
+                    else ft.Colors.BLUE_GREY_700
+                ),
+                [enabled],
+            )
+        else:
+            button_bgcolor = bgcolor if enabled else ft.Colors.BLUE_GREY_700
+        super().__init__(
+            visible=visible,
+            enabled=enabled,
+            text=text,
+            bgcolor=button_bgcolor,
+            **kwargs,
+        )
         self.height = 30
         self.content_padding = ft.padding.only(left=10, top=3, bottom=3)
-        self.bgcolor = bgcolor
         self.color = ft.Colors.WHITE
         self.style = ft.ButtonStyle(
             shape=ft.RoundedRectangleBorder(radius=5),
+            overlay_color={
+                ft.ControlState.HOVERED: ft.Colors.WHITE24,
+                ft.ControlState.DISABLED: ft.Colors.TRANSPARENT,
+            },
         )
 
 
@@ -175,7 +222,10 @@ class CustomSelectFileButton(ReactiveElevatedButton):
         self.color = ft.Colors.BLUE_100
         self.style = ft.ButtonStyle(
             bgcolor= ft.Colors.BLACK,
-            overlay_color= ft.Colors.BLACK54
+            overlay_color={
+                ft.ControlState.HOVERED: ft.Colors.BLACK54,
+                ft.ControlState.DISABLED: ft.Colors.TRANSPARENT,
+            },
         )
 
 
@@ -348,16 +398,22 @@ def make_REMOVE_counter_button(
         else:
             target_state.set(new_value)
 
-    return ReactiveRow(
-        [
-            ft.IconButton(
-                ft.Icons.REMOVE_CIRCLE,
-                on_click=lambda e: cx_minus_click(),
-                icon_color=ft.Colors.BLUE_100,
-            )
-        ],
-        visible=stores.ui.computing_is_stop,
+    button = ft.IconButton(
+        ft.Icons.REMOVE_CIRCLE,
+        on_click=lambda e: cx_minus_click() if stores.ui.computing_is_stop.get() else None,
+        icon_color=ft.Colors.BLUE_100,
     )
+
+    def sync_disabled() -> None:
+        button.disabled = not stores.ui.computing_is_stop.get()
+        try:
+            button.update()
+        except AssertionError:
+            pass
+
+    stores.ui.computing_is_stop.bind(sync_disabled)
+    sync_disabled()
+    return ReactiveRow([button])
 
 
 def make_ADD_counter_button(
@@ -394,13 +450,19 @@ def make_ADD_counter_button(
         else:
             target_state.set(new_value)
 
-    return ReactiveRow(
-        [
-            ft.IconButton(
-                ft.Icons.ADD_CIRCLE,
-                on_click=lambda e: cx_plus_click(),
-                icon_color=ft.Colors.BLUE_100,
-            )
-        ],
-        visible=stores.ui.computing_is_stop,
+    button = ft.IconButton(
+        ft.Icons.ADD_CIRCLE,
+        on_click=lambda e: cx_plus_click() if stores.ui.computing_is_stop.get() else None,
+        icon_color=ft.Colors.BLUE_100,
     )
+
+    def sync_disabled() -> None:
+        button.disabled = not stores.ui.computing_is_stop.get()
+        try:
+            button.update()
+        except AssertionError:
+            pass
+
+    stores.ui.computing_is_stop.bind(sync_disabled)
+    sync_disabled()
+    return ReactiveRow([button])

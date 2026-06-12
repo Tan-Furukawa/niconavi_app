@@ -22,6 +22,7 @@ from niconavi_app.components.common_component import (
     CustomExecuteButton,
     CustomText,
     CustomReactiveText,
+    confirm_action,
 )
 
 from niconavi_app.components.labeling_app.labeling_controller import LabelingController
@@ -489,10 +490,14 @@ class MovieTab(ft.Container):
 
         reset_button = CustomExecuteButton(
             "reset all",
-            on_click=lambda e: reset_button_click(stores, logger=logger),
-            visible=ReactiveState(
-                lambda: stores.ui.computing_is_stop.get()
-                and stores.ui.once_start.get(),
+            on_click=lambda e: confirm_action(
+                page,
+                "Reset project?",
+                "This will clear the loaded project and all later calculation results.",
+                lambda: reset_button_click(stores, logger=logger),
+            ),
+            enabled=ReactiveState(
+                lambda: stores.ui.computing_is_stop.get() and stores.ui.once_start.get(),
                 [stores.ui.computing_is_stop, stores.ui.once_start],
             ),
             bgcolor=ft.Colors.RED_ACCENT,
@@ -500,8 +505,13 @@ class MovieTab(ft.Container):
 
         recalculate_maps = CustomExecuteButton(
             "▶ recalulate",
-            on_click=lambda e: recalculate_maps_click(stores, logger=logger),
-            visible=ReactiveState(
+            on_click=lambda e: confirm_action(
+                page,
+                "Recalculate maps?",
+                "This will clear grain, filter, and analysis results made after map calculation.",
+                lambda: recalculate_maps_click(stores, logger=logger),
+            ),
+            enabled=ReactiveState(
                 lambda: stores.ui.computing_is_stop.get()
                 and stores.ui.once_start.get()
                 and (
@@ -509,14 +519,20 @@ class MovieTab(ft.Container):
                     and (stores.computation_result.center_int_y.get() is not None)
                 )
                 and stores.computation_result.raw_maps.get() is not None,
-                [stores.ui.computing_is_stop, stores.ui.once_start],
+                [
+                    stores.ui.computing_is_stop,
+                    stores.ui.once_start,
+                    stores.computation_result.center_int_x,
+                    stores.computation_result.center_int_y,
+                    stores.computation_result.raw_maps,
+                ],
             ),
         )
 
         execute_button = CustomExecuteButton(
             "▶ start",
             on_click=lambda e: load_data_clicked(stores, logger=logger),
-            visible=ReactiveState(
+            enabled=ReactiveState(
                 lambda: stores.ui.computing_is_stop.get()
                 and not stores.ui.once_start.get(),
                 [stores.ui.computing_is_stop, stores.ui.once_start],

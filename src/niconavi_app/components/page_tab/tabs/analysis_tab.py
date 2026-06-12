@@ -443,7 +443,7 @@ def make_cip_start_button(stores: Stores, *, logger: Logger) -> CustomExecuteBut
     return CustomExecuteButton(
         "Start CPO computation",
         on_click=lambda e: onclick_cip_start_button(stores, e, logger=logger),
-        visible=ReactiveState(
+        enabled=ReactiveState(
             lambda: stores.ui.computing_is_stop.get(),
             [stores.ui.computing_is_stop],
         ),

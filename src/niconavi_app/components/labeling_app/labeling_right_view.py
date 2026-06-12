@@ -12,8 +12,8 @@ from niconavi_app.components.labeling_app.ui_theme import (
     TEXT_COLOR,
     apply_border,
 )
-from niconavi_app.components.common_component import CustomExecuteButton
-from niconavi_app.components.log_view import update_logs, LogView
+from niconavi_app.components.common_component import CustomExecuteButton, confirm_action
+from niconavi_app.components.log_view import update_logs
 
 
 def _maybe_update(control: ft.Control) -> None:
@@ -30,14 +30,18 @@ def create_labeling_right_container(
 ) -> ft.Container:
     labeling = stores.labeling
 
-    status_text = ft.Text(value=labeling.status_text.get(), color=TEXT_COLOR)
-    last_action_text = ft.Text(value=labeling.last_action_text.get(), color=TEXT_COLOR)
+    def section_title(text: str) -> ft.Text:
+        return ft.Text(text, color=TEXT_COLOR, weight=ft.FontWeight.W_900)
+
+    status_text = ft.Text(value=labeling.status_text.get(), color=TEXT_COLOR, size=12)
+    last_action_text = ft.Text(value=labeling.last_action_text.get(), color=TEXT_COLOR, size=12)
     labeled_stats_text = ft.Text(
-        value=labeling.labeled_stats_text.get(), color=TEXT_COLOR
+        value=labeling.labeled_stats_text.get(), color=TEXT_COLOR, size=12
     )
     prediction_stats_text = ft.Text(
         value=labeling.prediction_stats_text.get(),
         color=TEXT_COLOR,
+        size=12,
     )
 
     def sync_status() -> None:
@@ -62,12 +66,13 @@ def create_labeling_right_container(
     labeling.prediction_stats_text.bind(sync_prediction_stats)
 
     boundary_checkbox = ft.Checkbox(
-        label=ft.Text("Show boundaries", color=ft.Colors.WHITE),
+        label=ft.Text("Boundaries", color=ft.Colors.WHITE),
         value=labeling.show_boundaries.get(),
         on_change=controller.handle_show_boundaries_change,
         fill_color=ft.Colors.BLUE_100,
         check_color=ft.Colors.BLACK,
     )
+    boundary_checkbox.dense = True
 
     def sync_boundary_checkbox() -> None:
         boundary_checkbox.value = labeling.show_boundaries.get()
@@ -81,13 +86,14 @@ def create_labeling_right_container(
     labeling._loaded.bind(sync_boundary_checkbox_enabled)
 
     training_checkbox = ft.Checkbox(
-        label=ft.Text("Show training boxes", color=ft.Colors.WHITE),
+        label=ft.Text("Training boxes", color=ft.Colors.WHITE),
         value=labeling.show_training_boxes.get(),
         on_change=controller.handle_show_training_boxes_change,
         label_style=ft.TextStyle(color=TEXT_COLOR),
         fill_color=ft.Colors.BLUE_100,
         check_color=ft.Colors.BLACK,
     )
+    training_checkbox.dense = True
 
     def sync_training_checkbox() -> None:
         training_checkbox.value = labeling.show_training_boxes.get()
@@ -111,6 +117,7 @@ def create_labeling_right_container(
             fill_color=ft.Colors.BLUE_100,
             check_color=ft.Colors.BLACK,
         )
+        checkbox.dense = True
 
         def sync_checkbox() -> None:
             checkbox.value = state.get()
@@ -132,7 +139,7 @@ def create_labeling_right_container(
             make_feature_checkbox("shape", "Shape"),
             make_feature_checkbox("position", "Position"),
         ],
-        wrap=True,
+        wrap=False,
         spacing=0,
         run_spacing=0,
         visible=False,
@@ -156,7 +163,7 @@ def create_labeling_right_container(
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Features", color=TEXT_COLOR, weight=ft.FontWeight.BOLD),
+                    section_title("Learning features"),
                     feature_toggle_icon,
                 ],
                 spacing=4,
@@ -168,7 +175,7 @@ def create_labeling_right_container(
     )
 
     overlay_value_text = ft.Text(
-        value=f"Overlay opacity: {labeling.overlay_alpha.get():.2f}",
+        value=f"Opacity: {labeling.overlay_alpha.get():.2f}",
         color=TEXT_COLOR,
     )
     overlay_slider = ft.Slider(
@@ -183,7 +190,7 @@ def create_labeling_right_container(
 
     def sync_overlay_controls() -> None:
         value = float(labeling.overlay_alpha.get())
-        overlay_value_text.value = f"Overlay opacity: {value:.2f}"
+        overlay_value_text.value = f"Opacity: {value:.2f}"
         overlay_slider.value = value
         _maybe_update(overlay_value_text)
         _maybe_update(overlay_slider)
@@ -196,7 +203,18 @@ def create_labeling_right_container(
     labeling._loaded.bind(sync_overlay_enabled)
 
     overlay_controls = ft.Column(
-        controls=[overlay_value_text, overlay_slider],
+        controls=[
+            ft.Row(
+                controls=[section_title("Display"), overlay_value_text],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            ft.Row(
+                controls=[boundary_checkbox, training_checkbox],
+                wrap=False,
+                spacing=0,
+            ),
+            overlay_slider,
+        ],
         spacing=4,
         horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
     )
@@ -229,7 +247,22 @@ def create_labeling_right_container(
         if count <= 0:
             update_logs(stores, ("No labeled samples to save.", "err"))
             return
-        controller.finish_labeling()
+
+        def finish() -> None:
+            controller.finish_labeling()
+
+        if stores.computation_result.grain_classification_result.get() is not None:
+            if page is not None:
+                confirm_action(
+                    page,
+                    "Save filter labels?",
+                    "This will replace filter classification and clear later analysis results.",
+                    finish,
+                )
+            else:
+                finish()
+            return
+        finish()
 
     done_button = CustomExecuteButton(
         text="Done",
@@ -266,19 +299,21 @@ def create_labeling_right_container(
     controls_column = ft.Column(
         controls=[
             status_text,
-            boundary_checkbox,
-            training_checkbox,
-            feature_controls,
+            ft.Divider(),
             overlay_controls,
+            feature_controls,
+            ft.Divider(),
+            section_title("Labels"),
             label_selection_container,
-            ft.Divider(color=TEXT_COLOR),
+            ft.Divider(),
+            section_title("Result"),
             last_action_text,
             labeled_stats_text,
             prediction_stats_text,
-            done_button,
+            ft.Row([done_button], alignment=ft.MainAxisAlignment.START),
         ],
-        spacing=12,
-        horizontal_alignment=ft.CrossAxisAlignment.START,
+        spacing=8,
+        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
     )
 
     container = apply_border(

@@ -18,6 +18,7 @@ from niconavi_app.components.common_component import (
     ReactiveFloatTextField,
     CustomExecuteButton,
     CustomText,
+    confirm_action,
     make_reactive_float_text_filed,
 )
 
@@ -186,10 +187,29 @@ class CenterTab(ft.Container):
 
         self.padding = stores.appearance.tab_padding
 
+        def has_downstream_results() -> bool:
+            return (
+                stores.computation_result.raw_maps.get() is not None
+                or stores.computation_result.grain_map.get() is not None
+                or stores.computation_result.grain_classification_result.get()
+                is not None
+            )
+
+        def handle_continue() -> None:
+            if has_downstream_results():
+                confirm_action(
+                    page,
+                    "Recalculate from center?",
+                    "This will clear map, filter, and analysis results made after center alignment.",
+                    lambda: on_click_center_button(stores, logger=logger),
+                )
+            else:
+                on_click_center_button(stores, logger=logger)
+
         execute_button = CustomExecuteButton(
             "▶ continue",
-            on_click=lambda e: on_click_center_button(stores, logger=logger),
-            visible=ReactiveState(
+            on_click=lambda e: handle_continue(),
+            enabled=ReactiveState(
                 lambda: (
                     stores.ui.computing_is_stop.get()
                     and stores.computation_result.rotation_img.get() is not None
@@ -221,6 +241,7 @@ class CenterTab(ft.Container):
             [
                 ft.Column(
                     [
+                        CustomText("Set the rotation center before building angle maps."),
                         ft.Row(
                             [
                                 CustomText("cx:"),

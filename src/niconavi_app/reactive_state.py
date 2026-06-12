@@ -303,23 +303,34 @@ class ReactiveElevatedButton(ElevatedButton):
         self,
         text: StateProperty[str],
         visible: StateProperty[bool] = True,
+        enabled: StateProperty[bool] = True,
         bgcolor: StateProperty[Optional[str]] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
+        if self.style is None:
+            self.style = ft.ButtonStyle(
+                overlay_color={
+                    ft.ControlState.HOVERED: ft.Colors.WHITE24,
+                    ft.ControlState.DISABLED: ft.Colors.TRANSPARENT,
+                }
+            )
 
         self._text = text
         self._visible = visible
+        self._enabled = enabled
         self._bgcolor = bgcolor
         self.set_props()
 
         bind_props(
-            [self._text, self._visible, self._bgcolor], lambda: self.content_update()
+            [self._text, self._visible, self._enabled, self._bgcolor],
+            lambda: self.content_update(),
         )  # 自動でデータバインディング
 
     def set_props(self) -> None:
         self.text = get_prop_value(self._text)
         self.visible = get_prop_value(self._visible)
+        self.disabled = not get_prop_value(self._enabled)
         self.bgcolor = get_prop_value(self._bgcolor)
 
     def content_update(self) -> None:
