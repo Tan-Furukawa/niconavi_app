@@ -8,7 +8,6 @@ from niconavi_app.reactive_state import (
     ReactiveCheckbox,
 )
 from niconavi_app.state import State, ReactiveState, is_not_None_state
-from niconavi_app.components.log_view import update_logs
 from niconavi_app.components.progress_bar import update_progress_bar
 from niconavi_app.components.common_component import ReactiveCodeTextInput, CustomText
 from niconavi_app.tools.tools import switch_tab_index
@@ -22,9 +21,7 @@ from result import Ok, Err, Result, is_ok, is_err
 from logging import getLogger, Logger
 
 import niconavi_app.niconavi.run_all as po
-import traceback
 from copy import deepcopy
-import traceback
 
 
 def continue_button_click(
@@ -40,15 +37,14 @@ def continue_button_click(
         )
 
         update_progress_bar(0.0, stores)
-        update_logs(stores, ("Merge completed.", "ok"))
+        update_logs(stores, ("Merge completed.", "ok"), logger=logger)
         save_in_ComputationResultState(res, stores)
         switch_tab_index(stores, 4)
 
     except Exception as e:
-        update_logs(stores, (str(e), "err"))
+        update_logs(stores, (str(e), "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Merge continuation failed.")
 
 
 def reset_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
@@ -60,11 +56,10 @@ def reset_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) ->
         save_in_ComputationResultState(r, stores)
 
     except Exception as e:
-        update_logs(stores, ("Failed to reset the merge state.", "err"))
-        update_logs(stores, (str(e), "err"))
+        update_logs(stores, ("Failed to reset the merge state.", "err"), logger=logger)
+        update_logs(stores, (str(e), "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Merge reset failed.")
 
 
 def merge_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
@@ -77,15 +72,14 @@ def merge_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) ->
         r.grain_map = deepcopy(r.grain_map_original)
         res = po.grain_merge(r)
         update_progress_bar(0.0, stores)
-        update_logs(stores, ("Merge completed.", "ok"))
+        update_logs(stores, ("Merge completed.", "ok"), logger=logger)
         save_in_ComputationResultState(res, stores)
 
     except Exception as e:
-        update_logs(stores, ("Merge failed.", "err"))
-        update_logs(stores, (str(e), "err"))
+        update_logs(stores, ("Merge failed.", "err"), logger=logger)
+        update_logs(stores, (str(e), "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Grain merge failed.")
 
 
 def get_merge_code(stores: Stores) -> str:

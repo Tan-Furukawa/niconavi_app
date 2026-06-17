@@ -49,12 +49,9 @@ def get_error_from_error_list(error_no: int) -> str:
 
 def exec_at_error(error_no: int, stores: Stores, *, logger: Logger) -> None:
     msg = get_error_from_error_list(error_no)
-    print(traceback.format_exc())
     update_progress_bar(0.0, stores)
-    update_logs(stores, (msg, "err"))
-    traceback.print_exc()
-    logger.error(f"displayed: {msg}")
-    logger.error(f"traceback: {traceback.format_exc()}")
+    update_logs(stores, (msg, "err"), logger=logger)
+    logger.exception("Handled application error %s", error_no)
 
 
 # %%

@@ -202,7 +202,15 @@ def make_mask_checkbox(stores: Stores) -> ReactiveCheckbox:
     )
 
 
-def load_existing_project(stores: Stores, file_path: str) -> None:
+def load_existing_project(
+    stores: Stores, file_path: str, *, logger: Logger | None = None
+) -> None:
+    active_logger = logger or getLogger("niconavi").getChild(__name__)
+    update_logs(
+        stores,
+        (f"Loading project from {file_path}...", "msg"),
+        logger=active_logger,
+    )
     project = load_project_archive(Path(file_path))
     r = project.computation_result
     save_in_ComputationResultState(r, stores)
@@ -215,6 +223,11 @@ def load_existing_project(stores: Stores, file_path: str) -> None:
     switch_tab_index(stores, restored_progress)
     restore_filter_tab_view(stores)
     restore_ui_selection(stores, project.ui_state, restored_progress)
+    update_logs(
+        stores,
+        (f"Loaded project from {file_path}.", "ok"),
+        logger=active_logger,
+    )
 
     # if stores.computation_result.grain_classification_result.get() is not None:
     #     switch_tab_index(stores, 3)
@@ -320,7 +333,7 @@ def on_result_load_project_file(
                 page.close(dlg_modal)
 
             def handle_yes(e1: ft.ControlEvent) -> None:
-                load_existing_project(stores, resolved_path)
+                load_existing_project(stores, resolved_path, logger=logger)
                 page.close(dlg_modal)
 
             dlg_modal = ft.AlertDialog(
@@ -338,7 +351,7 @@ def on_result_load_project_file(
 
             page.open(dlg_modal)
         else:
-            load_existing_project(stores, resolved_path)
+            load_existing_project(stores, resolved_path, logger=logger)
 
     def closure(e: ft.FilePickerResultEvent) -> None:
         if not e.files:

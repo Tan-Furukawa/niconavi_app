@@ -70,7 +70,6 @@ from niconavi_app.niconavi.tools.str_parser import (
     parse_larger_than_1,
 )
 from niconavi_app.components.labeling_app.reset import reset_filter_tab
-import traceback
 
 
 def select_grain_tab_image(stores: Stores, button_index: int) -> None:
@@ -186,15 +185,14 @@ def edit_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> 
         )
 
         update_progress_bar(0.0, stores)
-        update_logs(stores, ("Grain analysis completed.", "ok"))
+        update_logs(stores, ("Grain analysis completed.", "ok"), logger=logger)
         save_in_ComputationResultState(res, stores)
         switch_tab_index(stores, 2)
 
     except Exception as e:
-        update_logs(stores, (str(e), "err"))
+        update_logs(stores, (str(e), "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Failed to analyze grains.")
 
 
 def continue_button_click(
@@ -212,17 +210,16 @@ def continue_button_click(
         save_in_ComputationResultState(r, stores)
 
         update_progress_bar(0.0, stores)
-        update_logs(stores, ("Grain analysis completed.", "ok"))
+        update_logs(stores, ("Grain analysis completed.", "ok"), logger=logger)
         # save_in_ComputationResultState(res, stores)
 
         stores.ui.progress.set(3)
         switch_tab_index(stores, 3)
 
     except Exception as e:
-        update_logs(stores, (str(e), "err"))
+        update_logs(stores, (str(e), "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Failed to continue to filter tab.")
 
 
 def execute_grain_boundary_calc_button_click(
@@ -241,7 +238,7 @@ def execute_grain_boundary_calc_button_click(
         # r = reset_onclick_grain_analyze_button(r)
         save_in_ComputationResultState(r, stores)
         update_progress_bar(0.0, stores)
-        update_logs(stores, ("Grain segmentation completed.", "ok"))
+        update_logs(stores, ("Grain segmentation completed.", "ok"), logger=logger)
         # switch_tab_index(stores, 3)
 
         reset_filter_tab(stores)
@@ -250,15 +247,15 @@ def execute_grain_boundary_calc_button_click(
         controller.on_load_clicked()
 
     except Exception as e:
-        update_logs(stores, (str(e), "err"))
+        update_logs(stores, (str(e), "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Failed to calculate grain boundaries.")
     # analyze_grain_list(stores, logger=logger)
 
 
 def cleaning_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
     try:
+        update_logs(stores, ("Cleaning angle map...", "msg"), logger=logger)
         update_progress_bar(None, stores)
         iterator = stores.ui.map_tab.shock_filter_iterator.get()
         if iterator is None:
@@ -274,15 +271,24 @@ def cleaning_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger)
         stores.ui.map_tab.cleaning_count.set(stores.ui.map_tab.cleaning_count.get() + 1)
         select_grain_tab_image(stores, 21)
         update_progress_bar(0.0, stores)
+        update_logs(
+            stores,
+            (
+                f"Angle map cleaned "
+                f"({stores.ui.map_tab.cleaning_count.get()} step).",
+                "ok",
+            ),
+            logger=logger,
+        )
     except Exception:
-        update_logs(stores, ("Failed to clean angle map.", "err"))
+        update_logs(stores, ("Failed to clean angle map.", "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Failed to clean angle map.")
 
 
 def segmentation_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
     try:
+        update_logs(stores, ("Segmenting angle map...", "msg"), logger=logger)
         update_progress_bar(None, stores)
         angle_map_info = stores.ui.map_tab.angle_map_info.get()
         if angle_map_info is None:
@@ -302,15 +308,21 @@ def segmentation_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Log
         stores.ui.map_tab.fill_boundary_started.set(False)
         select_grain_tab_image(stores, 21)
         update_progress_bar(0.0, stores)
+        n_regions = int(np.unique(angle_map_info["merged_superpixel_labels"]).size)
+        update_logs(
+            stores,
+            (f"Angle map segmentation completed ({n_regions} regions).", "ok"),
+            logger=logger,
+        )
     except Exception:
-        update_logs(stores, ("Failed to segment angle map.", "err"))
+        update_logs(stores, ("Failed to segment angle map.", "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Failed to segment angle map.")
 
 
 def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
     try:
+        update_logs(stores, ("Filling thin dark boundaries...", "msg"), logger=logger)
         update_progress_bar(None, stores)
         angle_map_info = stores.ui.map_tab.angle_map_info.get()
         if angle_map_info is None:
@@ -331,15 +343,24 @@ def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Lo
         stores.ui.map_tab.fill_boundary_started.set(True)
         select_grain_tab_image(stores, 21)
         update_progress_bar(0.0, stores)
+        update_logs(
+            stores,
+            (f"Thin dark boundary fill completed (width {next_count:g}).", "ok"),
+            logger=logger,
+        )
     except Exception:
-        update_logs(stores, ("Failed to fill dark boundaries.", "err"))
+        update_logs(stores, ("Failed to fill dark boundaries.", "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Failed to fill dark boundaries.")
 
 
 def ok_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> None:
     try:
+        update_logs(
+            stores,
+            ("Registering angle-map grain boundaries...", "msg"),
+            logger=logger,
+        )
         update_progress_bar(None, stores)
         angle_map_info = stores.ui.map_tab.angle_map_info.get()
         if angle_map_info is None:
@@ -359,13 +380,12 @@ def ok_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Logger) -> No
         stores.ui.display_grain_boundary.set(True)
         stores.ui.map_tab.boundary_registered.set(True)
         select_grain_tab_image(stores, 7)
-        update_logs(stores, ("Angle-map grain boundaries registered.", "ok"))
+        update_logs(stores, ("Angle-map grain boundaries registered.", "ok"), logger=logger)
         update_progress_bar(0.0, stores)
     except Exception:
-        update_logs(stores, ("Failed to register grain boundaries.", "err"))
+        update_logs(stores, ("Failed to register grain boundaries.", "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Failed to register grain boundaries.")
 
 
 def reset_angle_map_button_click(
@@ -375,14 +395,15 @@ def reset_angle_map_button_click(
     logger: Logger,
 ) -> None:
     try:
+        update_logs(stores, ("Resetting angle map workflow...", "msg"), logger=logger)
         update_progress_bar(None, stores)
         reset_angle_map_workflow(stores)
         update_progress_bar(0.0, stores)
+        update_logs(stores, ("Angle map workflow reset.", "ok"), logger=logger)
     except Exception:
-        update_logs(stores, ("Failed to reset angle map.", "err"))
+        update_logs(stores, ("Failed to reset angle map.", "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Failed to reset angle map.")
 
 
 def make_map_action_button(

@@ -1,4 +1,4 @@
-# %%
+from logging import getLogger
 from typing import Callable, cast, Optional
 import numpy as np
 import cv2
@@ -18,6 +18,7 @@ import numpy as np
 from skimage.transform import AffineTransform, warp
 
 __all__ = ["find_rotation_center", "plot_center_image"]
+logger = getLogger("niconavi").getChild(__name__)
 
 
 def adjust_gamma(image: RGBPicture) -> RGBPicture:
@@ -206,7 +207,7 @@ def find_low_resolution_center_point(
     width_pixel = low_resolution_width
     rimg = resize_img(superimpose_image, width_pixel)
     height, width = rimg.shape
-    print("[1/2] Find the center of a lower-resolution image:")
+    logger.info("Finding stage center [1/2]: lower-resolution search.")
     center_x, center_y = find_symmetry_center(
         rimg, 10, progress_callback=progress_callback
     )
@@ -252,7 +253,7 @@ def find_high_resolution_center_point(
         icy = int(height * cy)
         delta_x = 5
         delta_y = 5
-        print("[2/2] Find the center of a higher-resolution image:")
+        logger.info("Finding stage center [2/2]: high-resolution refinement.")
         best_score, best_center = search_symmetry(
             gray_normalized=mimg,
             y_range=(icy - delta_y, icy + delta_y),

@@ -2,7 +2,7 @@ from niconavi_app.stores import Stores
 
 import flet as ft
 from typing import Callable, Literal, Optional
-from logging import Logger
+from logging import Logger, getLogger
 from niconavi_app.components.common_component import (
     CustomText,
 )
@@ -99,12 +99,12 @@ def update_logs(
     """
     message, level = entry
 
-    if logger is not None:
-        log_fn = {
-            "err": logger.error,
-            "warn": logger.warning,
-        }.get(level, logger.info)
-        log_fn(message)
+    active_logger = logger or getLogger("niconavi").getChild("ui")
+    log_fn = {
+        "err": active_logger.error,
+        "warn": active_logger.warning,
+    }.get(level, active_logger.info)
+    log_fn(message)
 
     existing = stores.ui.log_view.log_contents.get()
     stores.ui.log_view.log_contents.set([*existing, entry])

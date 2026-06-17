@@ -15,6 +15,10 @@ from niconavi_app.components.view.grain_view import at_grain_tab
 from niconavi_app.components.view.filter_view import at_filter_tab
 from niconavi_app.components.view.spatial_units import get_pixel_to_micrometer_scale
 from niconavi_app.tools.no_image import get_no_image
+from logging import getLogger
+
+
+logger = getLogger("niconavi").getChild(__name__)
 
 
 def which_tab_opened(stores: Stores) -> Figure:
@@ -31,25 +35,25 @@ def which_tab_opened(stores: Stores) -> Figure:
     match stores.ui.selected_index.get():
 
         case 0:
-            print("-----event at movie tab-----")
+            logger.debug("Rendering movie tab image view.")
             return at_movie_tab(stores)
         case 1:
-            print("-----event at center tab-----")
+            logger.debug("Rendering center tab image view.")
             return at_center_tab(stores)
         case 2:
-            print("-----event at grain tab-----")
+            logger.debug("Rendering map tab image view.")
             return at_grain_tab(stores)
         # case 3:
         #     print("-----event at merge tab-----")
         #     return at_filter_tab(stores, stores.ui.selected_button_at_merge_tab)
         case 3:
-            print("-----event at filter tab-----")
+            logger.debug("Rendering filter tab image view.")
             return at_filter_tab(stores, stores.ui.selected_button_at_filter_tab)
         case 4:
-            print("-----event at analysis tab-----")
+            logger.debug("Rendering analysis tab image view.")
             return at_analysis_tab(stores)
         case _:
-            print("other tab open")
+            logger.warning("No image view renderer for selected tab index %s.", stores.ui.selected_index.get())
             return get_no_image()
 
 

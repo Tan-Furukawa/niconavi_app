@@ -1,5 +1,5 @@
-# %%
 from scipy.ndimage import distance_transform_edt
+from logging import getLogger
 import numpy as np
 import matplotlib.pyplot as plt
 import random
@@ -17,6 +17,9 @@ from niconavi_app.niconavi.tools.type import (
     D2UintArray,
     D2,
 )
+
+
+logger = getLogger("niconavi").getChild(__name__)
 from niconavi_app.niconavi.tools.change_type import as_uint8
 from niconavi_app.niconavi.image.types_operation import as_BinaryPicture
 import skimage.morphology as skm
@@ -379,7 +382,7 @@ def assign_random_rgb(
                 random_mapping[id_value] = color
                 specified_ids.append(id_value)
             else:
-                print(f"警告: ID {id_value} は入力配列に存在しません。")
+                logger.warning("Color assignment skipped because label %s is not present.", id_value)
 
     # 残りの値に対してランダムな色を割り当てる
     for value in unique_values:

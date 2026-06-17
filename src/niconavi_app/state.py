@@ -11,9 +11,11 @@ from typing import (
     Any,
     Optional,
 )
+from logging import getLogger
 import numpy as np
 
 T = TypeVar("T")
+logger = getLogger("niconavi").getChild(__name__)
 
 
 def is_same(val1: Any, val2: Any) -> bool:
@@ -35,8 +37,8 @@ def is_same(val1: Any, val2: Any) -> bool:
 
         # int, float, str, boolなど基本型は直接比較
         return val1 == val2
-    except Exception as e:
-        print("is_same function is not support val1 and val2")
+    except Exception:
+        logger.warning("State comparison failed; treating values as different.", exc_info=True)
         return False  # 比較できないものは同じとみなさない。
 
 

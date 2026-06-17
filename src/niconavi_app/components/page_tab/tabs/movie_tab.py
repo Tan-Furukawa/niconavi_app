@@ -96,7 +96,10 @@ def load_data_clicked(stores: Stores, *, logger: Logger) -> None:
             switch_tab_index(stores, 1, logger)
 
             stores.ui.once_start.set(True)
-            print(stores.ui.computing_is_stop.get())
+            logger.debug(
+                "Movie loading completed. computing_is_stop=%s",
+                stores.ui.computing_is_stop.get(),
+            )
 
         except Exception as e:
             exec_at_error(9002, stores, logger=logger)
@@ -107,7 +110,7 @@ def load_data_clicked(stores: Stores, *, logger: Logger) -> None:
 
 
 def reset_button_click(stores: Stores, *, logger: Logger) -> None:
-    logger.info("On click reset button")
+    update_logs(stores, ("Resetting loaded video data...", "msg"), logger=logger)
 
     controller = LabelingController(stores=stores)
     controller.reset_application()
@@ -117,6 +120,7 @@ def reset_button_click(stores: Stores, *, logger: Logger) -> None:
     save_in_ComputationResultState(r, stores)
     stores.ui.once_start.set(False)
     stores.ui.progress.set(0)
+    update_logs(stores, ("Video tab reset completed.", "ok"), logger=logger)
 
 
 def recalculate_maps_click(stores: Stores, *, logger: Logger) -> None:

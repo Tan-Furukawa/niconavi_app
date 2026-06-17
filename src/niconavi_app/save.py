@@ -4,6 +4,7 @@ import base64
 import binascii
 from io import BytesIO, StringIO
 import json
+from logging import getLogger
 from pathlib import Path
 from typing import Any, Callable
 
@@ -23,6 +24,9 @@ from niconavi_app.project_io import (
     export_project_bytes as export_project_archive_bytes,
     save_project_atomic,
 )
+
+
+logger = getLogger("niconavi").getChild(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +67,7 @@ def save_fn(path: Path, stores: Stores) -> None:
     res = as_ComputationResult(stores.computation_result)
     save_project_atomic(path, res, ui_state=collect_project_ui_state(stores))
     stores.ui.current_project_path.set(str(path))
-    update_logs(stores, (f"Saved project to {path}.", "ok"))
+    update_logs(stores, (f"Saved project to {path}.", "ok"), logger=logger)
 
 
 def export_project_bytes(stores: Stores) -> bytes:
@@ -96,7 +100,7 @@ def _figure_pdf_bytes(stores: Stores) -> bytes:
 def save_figure_as_pdf(path: Path, stores: Stores) -> None:
     pdf_bytes = _figure_pdf_bytes(stores)
     path.write_bytes(pdf_bytes)
-    update_logs(stores, (f"Saved figure to {path}.", "ok"))
+    update_logs(stores, (f"Saved figure to {path}.", "ok"), logger=logger)
 
 
 def _labeling_view_pdf_bytes(stores: Stores) -> bytes:
@@ -124,7 +128,7 @@ def save_labeling_view_as_pdf(path: Path, stores: Stores) -> None:
     path.write_bytes(pdf_bytes)
     message = f"Saved labeling view to {path}."
     # stores.labeling.last_action_text.set(message)
-    update_logs(stores, (message, "ok"))
+    update_logs(stores, (message, "ok"), logger=logger)
 
 
 def export_image_as_pdf_bytes(stores: Stores) -> tuple[bytes, str]:
@@ -138,13 +142,14 @@ def save_image_as_pdf(stores: Stores) -> Callable[[FilePickerResultEvent], None]
         try:
             pdf_bytes, export_target = export_image_as_pdf_bytes(stores)
         except ValueError as exc:
-            update_logs(stores, (str(exc), "err"))
+            update_logs(stores, (str(exc), "err"), logger=logger)
             return
 
         if not e.path:
             update_logs(
                 stores,
                 ("Failed to save PDF: no destination path provided.", "err"),
+                logger=logger,
             )
             return
         path = Path(e.path)
@@ -157,7 +162,7 @@ def save_image_as_pdf(stores: Stores) -> Callable[[FilePickerResultEvent], None]
             # stores.labeling.last_action_text.set(message)
         else:
             message = f"Saved figure to {path}."
-        update_logs(stores, (message, "ok"))
+        update_logs(stores, (message, "ok"), logger=logger)
 
     return closure
 
@@ -304,18 +309,20 @@ def export_grain_information_zip_bytes(stores: Stores) -> bytes:
 def save_grain_information(stores: Stores) -> Callable[[FilePickerResultEvent], None]:
     def closure(e: FilePickerResultEvent) -> None:
         if not e.path:
-            update_logs(stores, ("File selection canceled.", "msg"))
+            update_logs(stores, ("File selection canceled.", "msg"), logger=logger)
             return
         folder = Path(e.path)
-        print("----------")
-        print(folder)
-        print("----------")
+        logger.info("Exporting grain information to %s.", folder)
         if folder.suffix:
             folder = folder.with_suffix("")
         try:
             export_grain_information(folder, stores)
-            update_logs(stores, (f"Saved grain information to {folder}.", "ok"))
+            update_logs(
+                stores,
+                (f"Saved grain information to {folder}.", "ok"),
+                logger=logger,
+            )
         except ValueError as exc:
-            update_logs(stores, (str(exc), "err"))
+            update_logs(stores, (str(exc), "err"), logger=logger)
 
     return closure

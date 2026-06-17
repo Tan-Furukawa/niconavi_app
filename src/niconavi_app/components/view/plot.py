@@ -28,6 +28,10 @@ from numpy.typing import NDArray
 from copy import deepcopy
 from niconavi_app.tools.no_image import get_no_image
 from niconavi_app.components.view.spatial_units import apply_micrometer_axis
+from logging import getLogger
+
+
+logger = getLogger("niconavi").getChild(__name__)
 
 
 # matplotlib.use("Agg")  # 非対話型バックエンドに切り替え
@@ -160,7 +164,11 @@ def apply_mask(stores: Stores, mat: NDArray) -> NDArray:
 
         mat_used = deepcopy(mat)
 
-        print(mask_used_mask)
+        logger.debug(
+            "Applying display mask: shape=%s masked_pixels=%s",
+            mask_used_mask.shape,
+            int(np.count_nonzero(mask_used_mask)),
+        )
 
         if grain_map is not None and grain_boundary is not None:
 

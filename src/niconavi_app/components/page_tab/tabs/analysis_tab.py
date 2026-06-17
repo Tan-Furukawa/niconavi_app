@@ -43,7 +43,6 @@ import flet as ft
 from flet import Page
 from logging import getLogger, Logger
 import niconavi_app.niconavi.run_all as po
-import traceback
 from niconavi_app.niconavi.tools.str_parser import (
     parse_larger_than_0,
     parse_int,
@@ -60,7 +59,7 @@ def onclick_cip_start_button(
         and stores.computation_result.tilt_image_info.estimate_inclination_by.get()
         == "max R"
     ):
-        update_logs(stores, ("Please provide the max R value.", "err"))
+        update_logs(stores, ("Please provide the max R value.", "err"), logger=logger)
         return None
 
     try:
@@ -77,13 +76,12 @@ def onclick_cip_start_button(
         r = po.make_CIP_map_info(r)
         update_progress_bar(0, stores)
         save_in_ComputationResultState(r, stores)
-        update_logs(stores, ("Inclination estimation completed.", "ok"))
+        update_logs(stores, ("Inclination estimation completed.", "ok"), logger=logger)
 
     except Exception as e:
-        update_logs(stores, (str(e), "err"))
+        update_logs(stores, (str(e), "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.exception("Inclination estimation failed.")
 
 
 def on_change_checkbox(

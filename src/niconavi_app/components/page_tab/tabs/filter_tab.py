@@ -21,7 +21,6 @@ from flet import Page
 from typing import Optional
 
 from logging import getLogger, Logger
-import traceback
 import numpy as np
 
 import niconavi_app.niconavi.run_all as po
@@ -51,15 +50,14 @@ def classify_button_click(
 
         r = po.grain_segmentation(r)
         update_progress_bar(0.0, stores)
-        update_logs(stores, ("Grain segmentation completed.", "ok"))
+        update_logs(stores, ("Grain segmentation completed.", "ok"), logger=logger)
         save_in_ComputationResultState(r, stores)
 
     except Exception as e:
-        traceback.print_exc()
-        update_logs(stores, ("Grain classification failed.", "err"))
-        update_logs(stores, (str(e), "err"))
+        update_logs(stores, ("Grain classification failed.", "err"), logger=logger)
+        update_logs(stores, (str(e), "err"), logger=logger)
         update_progress_bar(0.0, stores)
-        logger.error(str(e))
+        logger.exception("Grain classification failed.")
 
 
 class FilterTab(ft.Container):

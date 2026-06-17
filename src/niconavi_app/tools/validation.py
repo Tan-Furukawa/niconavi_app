@@ -1,10 +1,11 @@
 from typing import Any, Callable, TypeVar, Optional
+from logging import getLogger
 from niconavi_app.stores import Stores
 from niconavi_app.components.log_view import update_logs
-import traceback
 
 
 T = TypeVar("T", float, int)
+logger = getLogger("niconavi").getChild(__name__)
 
 
 def _message(base: str, prefix: Optional[str]) -> str:
@@ -25,8 +26,8 @@ def validation_when_button_click(
             return None
         return parsed_value
     except Exception:
-        traceback.print_exc()
-        update_logs(stores, (_message(base_message, prefix), "err"))
+        update_logs(stores, (_message(base_message, prefix), "err"), logger=logger)
+        logger.exception("Input validation failed for value %r.", val)
         return None
 
 

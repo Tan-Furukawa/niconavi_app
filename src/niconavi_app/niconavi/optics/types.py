@@ -1,4 +1,5 @@
 import numpy as np
+from logging import getLogger
 from numpy.typing import NDArray
 from typing import (
     NewType,
@@ -6,6 +7,9 @@ from typing import (
     TypeGuard,
     TypedDict,
 )
+
+
+logger = getLogger("niconavi").getChild(__name__)
 
 
 class DictColor(TypedDict):
@@ -45,8 +49,8 @@ def is_WavelengthVector(vec: NDArray) -> TypeGuard[WavelengthVector]:
             else:
                 return False
         else:
-            print(2)
+            logger.debug("Wavelength vector check failed: expected 1D array, got ndim=%s.", np.ndim(vec))
             return False
     else:
-        print(3)
+        logger.debug("Wavelength vector check failed: expected float64 dtype, got %s.", vec.dtype)
         return False

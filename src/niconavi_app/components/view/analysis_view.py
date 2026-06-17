@@ -1,4 +1,5 @@
 from typing import Optional
+from logging import getLogger
 
 from niconavi_app.stores import Stores, as_ComputationResult
 from matplotlib.pyplot import Figure, Axes
@@ -36,6 +37,7 @@ from niconavi_app.niconavi.statistics.array_to_float import circular_variance
 
 HISTOGRAM_STATS_DEFAULT = "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
 ROSE_STATS_DEFAULT = "Mean orientation: -\nCircular variance: -"
+logger = getLogger("niconavi").getChild(__name__)
 
 
 def _format_metric_line(
@@ -259,7 +261,10 @@ def at_analysis_tab(stores: Stores) -> Figure:
     stores.ui.analysis_tab.rose_stats_text.set(ROSE_STATS_DEFAULT)
     params = as_ComputationResult(stores.computation_result)
     if stores.ui.analysis_tab.plot_option.get() == "rose diagram":
-        print("-- computation_unit is grain")
+        logger.debug(
+            "Rendering rose diagram with computation_unit=%s.",
+            stores.ui.analysis_tab.computation_unit.get(),
+        )
         t1 = stores.ui.analysis_tab.grain_rose_diagram_target.get()
         fig, ax = rose_diagram_for_all_minerals(
             params,

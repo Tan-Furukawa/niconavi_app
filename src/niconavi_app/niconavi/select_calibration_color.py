@@ -1,4 +1,4 @@
-# %%
+from logging import getLogger
 import os
 import yaml  # type: ignore
 from typing import Dict, Any, Tuple, List, Literal, TypedDict
@@ -31,6 +31,9 @@ from niconavi_app.niconavi.tools.file_operation import (
     read_parameter_yaml,
 )
 from niconavi_app.niconavi.statistics.statistics import multiple_polynomial_regression
+
+
+logger = getLogger("niconavi").getChild(__name__)
 
 
 class Center(TypedDict):
@@ -183,11 +186,11 @@ class GetCalibrationColorFromImg:
         dominant_color = convert_rgb_dict_to_color_vector(dominant_color)
         mean_color = convert_rgb_dict_to_color_vector(mean_color)
 
-        print("true_color")
+        logger.info("Displaying true calibration color for %s.", file_name)
         show_color(true_color)
-        print("dominant_color")
+        logger.info("Displaying dominant calibration color for %s.", file_name)
         show_color(dominant_color)
-        print("mean_color")
+        logger.info("Displaying mean calibration color for %s.", file_name)
         show_color(mean_color)
 
     def plot_calibrate_range(self, file_name: str) -> Tuple[Figure, Axes]:
@@ -249,7 +252,7 @@ class GetCalibrationColorFromImg:
 
                 result.append(entry)
             except KeyError as e:
-                print(f"Missing key {e} in entry {key}")
+                logger.warning("Skipping calibration entry %s because key %s is missing.", key, e)
 
         actual_color = np.array(
             list(map(lambda x: x[color_type], result)), dtype=np.uint8
