@@ -25,6 +25,9 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.lines as mlines
 import matplotlib.axes as maxes
 from scipy.ndimage import gaussian_filter
+from niconavi_app.niconavi.optics.spherical_density import (
+    make_spherical_kde_on_stereographic_grid,
+)
 
 
 def canonicalize_poles(
@@ -371,8 +374,8 @@ def plot_as_stereo_projection(
     sigma: int = 6,
     cmap: str = "jet",
     levels: int = 10,
-    log_density: bool = False,
-    log_density_floor: float = 1e-6,
+    density_method: Literal["projected_gaussian", "spherical_kde"] = "projected_gaussian",
+    spherical_bandwidth_deg: float = 5.0,
 ) -> tuple[Figure, Axes, Colorbar]:
     """ステレオ投影上にカーネル密度推定（等密度補正付き）を描画する。
 
@@ -392,10 +395,11 @@ def plot_as_stereo_projection(
         等高線のカラーマップ。
     levels : int, default 10
         等高線数。
-    log_density : bool, default False
-        True のとき、正規化密度を log10 表示する。
-    log_density_floor : float, default 1e-6
-        log_density=True のとき、0 付近をこの密度で下限クリップする。
+    density_method : {"projected_gaussian", "spherical_kde"}, default "projected_gaussian"
+        "projected_gaussian" は投影後の2-Dヒストグラムをガウシアン平滑化する。
+        "spherical_kde" は球面上の角距離でvon Mises-Fisher型KDEを計算する。
+    spherical_bandwidth_deg : float, default 5.0
+        density_method="spherical_kde" の角度バンド幅（度）。
 
     Returns
     -------
@@ -423,36 +427,43 @@ def plot_as_stereo_projection(
         weights = 1.0 / (1.0 + np.cos(theta)) ** 2  # J⁻¹
     weights[~np.isfinite(weights)] = 0.0  # θ=0 で発散する点を 0 とする
 
-    # --- 2‑D ヒストグラム & ガウシアン平滑化 ------------------------------
-    edges = np.linspace(-1.0, 1.0, n_grid + 1)
-    H, _, _ = np.histogram2d(x, y, bins=[edges, edges], weights=weights)
+    if density_method == "projected_gaussian":
+        # --- 2-D ヒストグラム & ガウシアン平滑化 --------------------------
+        edges = np.linspace(-1.0, 1.0, n_grid + 1)
+        H, _, _ = np.histogram2d(x, y, bins=[edges, edges], weights=weights)
 
-    if sigma > 0:
-        H = gaussian_filter(H, sigma=sigma, mode="constant")
+        if sigma > 0:
+            H = gaussian_filter(H, sigma=sigma, mode="constant")
 
-    # H /= H.sum()  # ∑=1 に正規化
-
-    # 円外を NaN にして可視化対象外とする
-    X, Y = np.meshgrid(np.linspace(-1, 1, H.shape[0]), np.linspace(-1, 1, H.shape[1]))
-    H[X**2 + Y**2 >= 1] = np.nan
-    H /= np.nansum(H)
-
-    density_label = "Density"
-    if log_density:
-        floor = max(float(log_density_floor), np.finfo(float).tiny)
-        H = np.log10(np.clip(H, floor, None))
-        density_label = f"log10(Density), floor={floor:g}"
+        X, Y = np.meshgrid(
+            np.linspace(-1, 1, H.shape[1]),
+            np.linspace(-1, 1, H.shape[0]),
+        )
+        density = H.T
+        density[X**2 + Y**2 >= 1] = np.nan
+        density /= np.nansum(density)
+        density_label = f"Density (projected Gaussian, sigma={sigma:g})"
+    elif density_method == "spherical_kde":
+        X, Y, density = make_spherical_kde_on_stereographic_grid(
+            inclination_reflected,
+            azimuth_reflected,
+            n_grid=n_grid,
+            bandwidth_deg=spherical_bandwidth_deg,
+        )
+        density_label = f"Density (spherical KDE, bw={spherical_bandwidth_deg:g} deg)"
+    else:
+        raise ValueError(f"Unknown density_method: {density_method}")
 
     # --- 描画 --------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(6, 6))
-    cf = ax.contourf(Y, X, H, levels=levels, cmap=cmap)
+    cf = ax.contourf(X, Y, density, levels=levels, cmap=cmap)
     cbar = fig.colorbar(cf, label=density_label)
 
     if plot_points:
-        r_points = np.tan(inclination_rad / 2)
+        r_points = np.tan(inclination_reflected / 2)
         ax.scatter(
-            r_points * np.cos(azimuth_rad),
-            r_points * np.sin(azimuth_rad),
+            r_points * np.cos(azimuth_reflected),
+            r_points * np.sin(azimuth_reflected),
             s=1,
             color="white",
         )
