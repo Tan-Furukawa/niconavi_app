@@ -371,6 +371,8 @@ def plot_as_stereo_projection(
     sigma: int = 6,
     cmap: str = "jet",
     levels: int = 10,
+    log_density: bool = False,
+    log_density_floor: float = 1e-6,
 ) -> tuple[Figure, Axes, Colorbar]:
     """ステレオ投影上にカーネル密度推定（等密度補正付き）を描画する。
 
@@ -390,6 +392,10 @@ def plot_as_stereo_projection(
         等高線のカラーマップ。
     levels : int, default 10
         等高線数。
+    log_density : bool, default False
+        True のとき、正規化密度を log10 表示する。
+    log_density_floor : float, default 1e-6
+        log_density=True のとき、0 付近をこの密度で下限クリップする。
 
     Returns
     -------
@@ -431,10 +437,16 @@ def plot_as_stereo_projection(
     H[X**2 + Y**2 >= 1] = np.nan
     H /= np.nansum(H)
 
+    density_label = "Density"
+    if log_density:
+        floor = max(float(log_density_floor), np.finfo(float).tiny)
+        H = np.log10(np.clip(H, floor, None))
+        density_label = f"log10(Density), floor={floor:g}"
+
     # --- 描画 --------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(6, 6))
     cf = ax.contourf(Y, X, H, levels=levels, cmap=cmap)
-    cbar = fig.colorbar(cf, label="Density")
+    cbar = fig.colorbar(cf, label=density_label)
 
     if plot_points:
         r_points = np.tan(inclination_rad / 2)
