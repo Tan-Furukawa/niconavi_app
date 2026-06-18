@@ -348,6 +348,17 @@ def closest_element_indices(vec: D1FloatArray, mat: D2FloatArray) -> D2IntArray:
     return cast(D2IntArray, indices)
 
 
+def closest_periodic_element_indices(
+    vec: D1FloatArray,
+    mat: D2FloatArray,
+    *,
+    period: float = 360.0,
+) -> D2IntArray:
+    diff = np.abs((mat[..., np.newaxis] - vec + period / 2) % period - period / 2)
+    indices = np.argmin(diff, axis=-1)
+    return cast(D2IntArray, indices)
+
+
 def choose_pixel_of_indices_matrix(
     pics: list[RGBPicture], indices_mat: D2IntArray
 ) -> RGBPicture:
@@ -362,6 +373,11 @@ def choose_pixel_of_indices_matrix(
     j_indices = np.arange(e2)  # shape (10,)
     img = np.array(pics, dtype=np.uint8)[indices_mat, i_indices, j_indices, :]
     return cast(RGBPicture, img)
+
+
+def brightest_pixel_indices(pics: list[RGBPicture]) -> D2IntArray:
+    gray_pics = [cv2.cvtColor(pic, cv2.COLOR_RGB2GRAY) for pic in pics]
+    return cast(D2IntArray, np.argmax(np.array(gray_pics, dtype=np.uint8), axis=0))
 
 
 def make_color_maps(
@@ -412,11 +428,12 @@ def make_color_maps(
     )
 
     # under cross polarized light
-    max_retardation_index = closest_element_indices(
-        angles, D2FloatArray(extinction_angle + 45)
+    max_retardation_index = brightest_pixel_indices(pics)
+    max_retardation_angle = D2FloatArray(angles[max_retardation_index])
+    min_retardation_index = closest_periodic_element_indices(
+        angles,
+        D2FloatArray(max_retardation_angle + 45),
     )
-
-    min_retardation_index = closest_element_indices(angles, extinction_angle)
 
     R_color_map = choose_pixel_of_indices_matrix(pics, max_retardation_index)
 
