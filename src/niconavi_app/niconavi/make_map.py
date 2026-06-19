@@ -9,6 +9,7 @@ from niconavi_app.niconavi.retardation_normalization import (
 )
 from niconavi_app.niconavi.statistics.array_to_float import circular_median_data_via_grid
 from typing import (
+    Literal,
     overload,
     Optional,
     cast,
@@ -40,6 +41,9 @@ from niconavi_app.niconavi.image.image import convert_to_gray_scale
 from niconavi_app.niconavi.tools.change_type import as_float64
 
 __all__ = ["make_extinction_angle_map", "find_extinction_angle"]
+
+RColorMapSource = Literal["brightest_angle", "extinction_angle", "extinction_color_map"]
+R_COLOR_MAP_SOURCE: RColorMapSource = "brightest_angle"
 
 
 def transpose_dat_shape(
@@ -386,6 +390,7 @@ def make_color_maps(
     s_pics: Optional[list[RGBPicture]] = None,
     s_angles: Optional[D1FloatArray] = None,
     progress_callback: Callable[[float | None], None] = lambda p: None,
+    r_color_map_source: RColorMapSource = R_COLOR_MAP_SOURCE,
 ) -> RawMaps:
 
     degree_0 = pics[np.argmin(np.abs(angles - 0.0))]
@@ -427,13 +432,26 @@ def make_color_maps(
         90,
     )
 
-    # under cross polarized light
-    max_retardation_index = brightest_pixel_indices(pics)
-    max_retardation_angle = D2FloatArray(angles[max_retardation_index])
-    min_retardation_index = closest_periodic_element_indices(
-        angles,
-        D2FloatArray(max_retardation_angle + 45),
-    )
+    if r_color_map_source == "brightest_angle":
+        max_retardation_index = brightest_pixel_indices(pics)
+        max_retardation_angle = D2FloatArray(angles[max_retardation_index])
+        min_retardation_index = closest_periodic_element_indices(
+            angles,
+            D2FloatArray(max_retardation_angle + 45),
+        )
+    elif r_color_map_source in ("extinction_angle", "extinction_color_map"):
+        min_retardation_index = closest_periodic_element_indices(
+            angles,
+            D2FloatArray(extinction_angle),
+            period=90,
+        )
+        max_retardation_index = closest_periodic_element_indices(
+            angles,
+            D2FloatArray(extinction_angle + 45),
+            period=90,
+        )
+    else:
+        raise ValueError(f"Unknown R color map source: {r_color_map_source}")
 
     R_color_map = choose_pixel_of_indices_matrix(pics, max_retardation_index)
 

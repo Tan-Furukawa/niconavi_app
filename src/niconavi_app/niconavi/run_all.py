@@ -44,7 +44,12 @@ from niconavi_app.niconavi.image.image import (
     create_outside_circle_mask,
 )
 from niconavi_app.niconavi.image.type import Color, D1RGB_Array
-from niconavi_app.niconavi.make_map import make_color_maps, make_R_maps, make_retardation_color_map
+from niconavi_app.niconavi.make_map import (
+    RColorMapSource,
+    make_color_maps,
+    make_R_maps,
+    make_retardation_color_map,
+)
 from niconavi_app.niconavi.optics.color import show_color
 from niconavi_app.niconavi.retardation_normalization import (
     select_h_in_color_chart,
@@ -681,6 +686,7 @@ def get_inclination(
 def make_raw_color_maps(
     params: ComputationResult,
     progress_callback: Callable[[float | None], None] = lambda p: None,
+    r_color_map_source: RColorMapSource = "brightest_angle",
 ) -> ComputationResult:
     if is_not_None_type(params.pics_rotated) and is_not_None_type(params.angles):
         try:
@@ -693,6 +699,7 @@ def make_raw_color_maps(
                         params.reta_pics_rotated,
                         params.reta_angles,
                         progress_callback=progress_callback,
+                        r_color_map_source=r_color_map_source,
                     ),
                 }
             )
