@@ -9,13 +9,13 @@ from niconavi_app.niconavi.retardation_normalization import (
 )
 from niconavi_app.niconavi.statistics.array_to_float import circular_median_data_via_grid
 from typing import (
-    Literal,
     overload,
     Optional,
     cast,
     TypeVar,
     Callable,
 )
+from niconavi_app.app_config import R_COLOR_MAP_SOURCE, RColorMapSource
 from niconavi_app.niconavi.image.image import resize_img, create_outside_circle_mask
 from niconavi_app.niconavi.image.tools import apply_color_map, apply_2dcolor_map
 import numpy as np
@@ -41,9 +41,6 @@ from niconavi_app.niconavi.image.image import convert_to_gray_scale
 from niconavi_app.niconavi.tools.change_type import as_float64
 
 __all__ = ["make_extinction_angle_map", "find_extinction_angle"]
-
-RColorMapSource = Literal["brightest_angle", "extinction_angle", "extinction_color_map"]
-R_COLOR_MAP_SOURCE: RColorMapSource = "brightest_angle"
 
 
 def transpose_dat_shape(

@@ -1,5 +1,6 @@
 # %%
 from typing import Callable, Literal, TypedDict, TypeGuard, TypeVar, overload
+from niconavi_app.app_config import R_COLOR_MAP_SOURCE, RColorMapSource
 from niconavi_app.niconavi.custom_error import (
     InvalidRotationDirection,
     RotatedAngleError,
@@ -45,7 +46,6 @@ from niconavi_app.niconavi.image.image import (
 )
 from niconavi_app.niconavi.image.type import Color, D1RGB_Array
 from niconavi_app.niconavi.make_map import (
-    RColorMapSource,
     make_color_maps,
     make_R_maps,
     make_retardation_color_map,
@@ -686,7 +686,7 @@ def get_inclination(
 def make_raw_color_maps(
     params: ComputationResult,
     progress_callback: Callable[[float | None], None] = lambda p: None,
-    r_color_map_source: RColorMapSource = "brightest_angle",
+    r_color_map_source: RColorMapSource = R_COLOR_MAP_SOURCE,
 ) -> ComputationResult:
     if is_not_None_type(params.pics_rotated) and is_not_None_type(params.angles):
         try:
