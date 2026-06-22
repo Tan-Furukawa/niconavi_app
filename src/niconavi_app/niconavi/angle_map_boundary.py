@@ -494,7 +494,7 @@ def fill_dark_boundaries(
     theta_phi_angle_info: dict[str, Any],
     *,
     branch_width_thresh: float,
-    dark_l_thresh: float = 15.0,
+    dark_l_thresh: float | None = 15.0,
     max_iterations: int = 3,
     fixed_skeleton_once: bool = False,
 ) -> dict[str, Any]:
@@ -518,17 +518,17 @@ def fill_dark_boundaries(
             values[int(label)] = float(np.median(lab_l[component_labels == label]))
         return values
 
-    def thin_branch_mask(dark_mask: np.ndarray) -> np.ndarray:
-        skeleton = skeletonize(dark_mask)
+    def thin_branch_mask(region_mask: np.ndarray) -> np.ndarray:
+        skeleton = skeletonize(region_mask)
         if not np.any(skeleton):
-            return np.zeros_like(dark_mask, dtype=bool)
-        dist = cv2.distanceTransform(dark_mask.astype(np.uint8), cv2.DIST_L2, 3)
+            return np.zeros_like(region_mask, dtype=bool)
+        dist = cv2.distanceTransform(region_mask.astype(np.uint8), cv2.DIST_L2, 3)
         skeleton_width = 2.0 * dist
         thin_skeleton = skeleton & (skeleton_width <= float(branch_width_thresh))
         if not np.any(thin_skeleton):
-            return np.zeros_like(dark_mask, dtype=bool)
+            return np.zeros_like(region_mask, dtype=bool)
         n_branches, branch_labels = cv2.connectedComponents(thin_skeleton.astype(np.uint8), connectivity=8)
-        mask = np.zeros_like(dark_mask, dtype=bool)
+        mask = np.zeros_like(region_mask, dtype=bool)
         for branch_id in range(1, n_branches):
             branch = branch_labels == branch_id
             if not np.any(branch) or float(np.median(skeleton_width[branch])) > branch_width_thresh:
@@ -540,7 +540,7 @@ def fill_dark_boundaries(
                 yy, xx = np.ogrid[y_slice, x_slice]
                 mask[y_slice, x_slice] |= (yy - y) ** 2 + (xx - x) ** 2 <= radius ** 2
 
-        mask &= dark_mask
+        mask &= region_mask
         directional_width = np.zeros_like(dist)
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for y, x in zip(*np.nonzero(mask)):
@@ -550,7 +550,7 @@ def fill_dark_boundaries(
                 for sign in (-1, 1):
                     yy = y + sign * dy
                     xx = x + sign * dx
-                    while 0 <= yy < height and 0 <= xx < width and dark_mask[yy, xx]:
+                    while 0 <= yy < height and 0 <= xx < width and region_mask[yy, xx]:
                         line_width += 1
                         yy += sign * dy
                         xx += sign * dx
@@ -558,37 +558,69 @@ def fill_dark_boundaries(
             directional_width[y, x] = float(np.median(widths))
         return mask & (directional_width <= float(branch_width_thresh))
 
+    def candidate_labels(component_labels: np.ndarray) -> list[int]:
+        unique_labels = np.unique(component_labels[component_labels >= 0])
+        if dark_l_thresh is None:
+            return [int(label) for label in unique_labels]
+        return [
+            label
+            for label, l_value in label_median_l(component_labels).items()
+            if l_value <= float(dark_l_thresh)
+        ]
+
+    def removable_mask(component_labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        remove_mask = np.zeros(component_labels.shape, dtype=bool)
+        candidate_mask = np.zeros(component_labels.shape, dtype=bool)
+        for label in candidate_labels(component_labels):
+            region_mask = component_labels == label
+            candidate_mask |= region_mask
+            remove_mask |= thin_branch_mask(region_mask)
+        return remove_mask, candidate_mask
+
     fixed_remove_mask = None
     for _ in range(int(max_iterations)):
         labels = _split_connected_components(_compact_labels(labels))
-        dark_labels = [
-            label
-            for label, l_value in label_median_l(labels).items()
-            if l_value <= float(dark_l_thresh)
-        ]
-        if not dark_labels:
+        candidate_label_ids = candidate_labels(labels)
+        if not candidate_label_ids:
             break
 
-        dark_mask = np.isin(labels, dark_labels)
+        candidate_mask = np.isin(labels, candidate_label_ids)
         if fixed_skeleton_once:
             if fixed_remove_mask is None:
-                fixed_remove_mask = thin_branch_mask(dark_mask)
-            remove_mask = fixed_remove_mask & dark_mask
+                fixed_remove_mask, _ = removable_mask(labels)
+            remove_mask = fixed_remove_mask & candidate_mask
         else:
-            remove_mask = thin_branch_mask(dark_mask)
+            remove_mask, candidate_mask = removable_mask(labels)
 
         if not np.any(remove_mask):
             break
 
-        target_mask = (~remove_mask) & (~dark_mask)
-        if not np.any(target_mask):
-            target_mask = ~remove_mask
-        if not np.any(target_mask):
-            break
+        if dark_l_thresh is None:
+            next_labels = labels.copy()
+            changed_any_label = False
+            for label in np.unique(labels[remove_mask]):
+                label_remove_mask = remove_mask & (labels == label)
+                target_mask = (~remove_mask) & (labels != label)
+                if not np.any(target_mask):
+                    continue
+                _, nearest = ndi.distance_transform_edt(~target_mask, return_indices=True)
+                next_labels[label_remove_mask] = labels[
+                    nearest[0][label_remove_mask],
+                    nearest[1][label_remove_mask],
+                ]
+                changed_any_label = True
+            if not changed_any_label:
+                break
+        else:
+            target_mask = (~remove_mask) & (~candidate_mask)
+            if not np.any(target_mask):
+                target_mask = ~remove_mask
+            if not np.any(target_mask):
+                break
 
-        _, nearest = ndi.distance_transform_edt(~target_mask, return_indices=True)
-        next_labels = labels.copy()
-        next_labels[remove_mask] = labels[nearest[0][remove_mask], nearest[1][remove_mask]]
+            _, nearest = ndi.distance_transform_edt(~target_mask, return_indices=True)
+            next_labels = labels.copy()
+            next_labels[remove_mask] = labels[nearest[0][remove_mask], nearest[1][remove_mask]]
         if np.array_equal(next_labels, labels):
             break
 

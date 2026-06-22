@@ -320,7 +320,7 @@ def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Lo
         next_count = stores.ui.map_tab.fill_boundary_count.get() + 0.5
         angle_map_info = fill_dark_boundaries(
             angle_map_info,
-            dark_l_thresh=15,
+            dark_l_thresh=None,
             branch_width_thresh=next_count,
             max_iterations=3,
             fixed_skeleton_once=False,
@@ -332,7 +332,7 @@ def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Lo
         select_grain_tab_image(stores, 21)
         update_progress_bar(0.0, stores)
     except Exception:
-        update_logs(stores, ("Failed to fill dark boundaries.", "err"))
+        update_logs(stores, ("Failed to fill thin boundaries.", "err"))
         update_progress_bar(0.0, stores)
         traceback.print_exc()
         logger.error(traceback.format_exc())
