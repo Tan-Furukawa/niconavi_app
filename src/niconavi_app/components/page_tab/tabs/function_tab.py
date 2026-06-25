@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import flet as ft
 import numpy as np
-from flet.matplotlib_chart import MatplotlibChart
 from matplotlib.figure import Figure
 
 from niconavi_app.components.common_component import (
@@ -11,12 +10,13 @@ from niconavi_app.components.common_component import (
     CustomRadio,
     CustomText,
     CustomTextField,
-    customDivider,
 )
 from niconavi_app.niconavi.optics.tools import (
     get_max_retardation_from_thickness,
     get_thickness_from_max_retardation,
 )
+import niconavi_app.niconavi.optics.optical_system as optical_system
+from niconavi_app.niconavi.optics.uniaxial_plate import get_spectral_distribution
 from niconavi_app.stores import Stores
 
 
@@ -75,11 +75,24 @@ def _parse_positive_float(value: str, field_name: str) -> float:
     return parsed
 
 
+def _retardation_interference_color(retardation_nm: float) -> tuple[int, int, int]:
+    rgb = get_spectral_distribution(
+        optical_system.get_retardation_system(R=retardation_nm, alpha=1)
+    )["rgb"]
+    red, green, blue = [int(value) for value in np.asarray(rgb, dtype=np.uint8)]
+    return red, green, blue
+
+
+def _rgb_to_hex(color: tuple[int, int, int]) -> str:
+    return "#{:02x}{:02x}{:02x}".format(*color)
+
+
 class FunctionTab(ft.Container):
     def __init__(self, page: ft.Page, stores: Stores):
         super().__init__()
         self.padding = stores.appearance.tab_padding
         self.expand = True
+        self.stores = stores
 
         self.mode = "thickness"
         self.last_thickness_mm = DEFAULT_THICKNESS_MM
@@ -115,7 +128,6 @@ class FunctionTab(ft.Container):
             width=90,
             height=30,
             content_padding=ft.padding.only(left=10, top=3, bottom=3),
-            visible=False,
         )
         self.thickness_row = ft.Row(
             [self.thickness_input, CustomText("mm")],
@@ -132,14 +144,18 @@ class FunctionTab(ft.Container):
         )
         self.status_text = CustomText("")
         self.status_text.color = ft.Colors.RED_200
-
-        self.figure = _make_figure(
-            thickness_mm=self.last_thickness_mm,
-            max_retardation_nm=self.last_max_retardation_nm,
-            no=QUARTZ_OMEGA_REFRACTIVE_INDEX,
-            ne=QUARTZ_EPSILON_REFRACTIVE_INDEX,
+        self.interference_color = _retardation_interference_color(
+            DEFAULT_MAX_RETARDATION_NM
         )
-        self.chart = MatplotlibChart(self.figure, expand=True)
+        self.color_swatch = ft.Container(
+            width=34,
+            height=24,
+            bgcolor=_rgb_to_hex(self.interference_color),
+            border=ft.border.all(1, ft.Colors.WHITE60),
+        )
+        self.color_text = CustomText(
+            f"Interference color RGB: {self.interference_color}"
+        )
 
         self.mode_radio = ft.RadioGroup(
             value=self.mode,
@@ -160,8 +176,6 @@ class FunctionTab(ft.Container):
 
         self.content = ft.Column(
             [
-                self.chart,
-                customDivider(),
                 CustomText("Function"),
                 self.feature_dropdown,
                 CustomText("Refractive index"),
@@ -181,6 +195,7 @@ class FunctionTab(ft.Container):
                 self.retardation_row,
                 self.calculate_button,
                 self.result_text,
+                ft.Row([self.color_swatch, self.color_text], spacing=8),
                 self.status_text,
             ],
             spacing=8,
@@ -230,14 +245,33 @@ class FunctionTab(ft.Container):
 
             self.last_thickness_mm = float(thickness_mm)
             self.last_max_retardation_nm = float(max_retardation_nm)
-            self.chart.figure = _make_figure(
-                thickness_mm=self.last_thickness_mm,
-                max_retardation_nm=self.last_max_retardation_nm,
-                no=no,
-                ne=ne,
+            self.stores.ui.function_tab.figure.set(
+                _make_figure(
+                    thickness_mm=self.last_thickness_mm,
+                    max_retardation_nm=self.last_max_retardation_nm,
+                    no=no,
+                    ne=ne,
+                )
             )
+            self.interference_color = _retardation_interference_color(
+                self.last_max_retardation_nm
+            )
+            self.color_swatch.bgcolor = _rgb_to_hex(self.interference_color)
+            self.color_text.value = f"Interference color RGB: {self.interference_color}"
             self.status_text.value = ""
         except ValueError as exc:
             self.status_text.value = str(exc)
 
         self.update()
+
+
+def at_function_tab(stores: Stores) -> Figure:
+    figure = stores.ui.function_tab.figure.get()
+    if figure is not None:
+        return figure
+    return _make_figure(
+        thickness_mm=DEFAULT_THICKNESS_MM,
+        max_retardation_nm=DEFAULT_MAX_RETARDATION_NM,
+        no=QUARTZ_OMEGA_REFRACTIVE_INDEX,
+        ne=QUARTZ_EPSILON_REFRACTIVE_INDEX,
+    )

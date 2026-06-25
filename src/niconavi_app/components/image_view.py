@@ -14,6 +14,7 @@ from niconavi_app.components.view.center_view import at_center_tab
 from niconavi_app.components.view.grain_view import at_grain_tab
 from niconavi_app.components.view.filter_view import at_filter_tab
 from niconavi_app.components.view.spatial_units import get_pixel_to_micrometer_scale
+from niconavi_app.components.page_tab.tabs.function_tab import at_function_tab
 from niconavi_app.tools.no_image import get_no_image
 
 
@@ -48,6 +49,9 @@ def which_tab_opened(stores: Stores) -> Figure:
         case 4:
             print("-----event at analysis tab-----")
             return at_analysis_tab(stores)
+        case 5:
+            print("-----event at function tab-----")
+            return at_function_tab(stores)
         case _:
             print("other tab open")
             return get_no_image()
@@ -110,6 +114,7 @@ class ImageView(ft.Container):
             stores.ui.grain_tab.slider_median_kernel,
             stores.ui.grain_tab.brightness_correction,
             stores.ui.map_tab.angle_map_display,
+            stores.ui.function_tab.figure,
             stores.computation_result.plot_parameters.histogram_bins,
             stores.computation_result.plot_parameters.rose_diagram_bins,
             stores.computation_result.plot_parameters.rose_diagram180_bins,

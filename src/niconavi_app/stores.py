@@ -265,6 +265,11 @@ class MapTab:
         self.boundary_registered: State[bool] = State(False)
 
 
+class FunctionTab:
+    def __init__(self) -> None:
+        self.figure: State[Optional[Figure]] = State(None)
+
+
 class UI:
     def __init__(self) -> None:
         self.selected_index = State(0)
@@ -274,6 +279,7 @@ class UI:
         self.movie_tab = MovieTabObj()
         self.grain_tab = GrainTab()
         self.map_tab = MapTab()
+        self.function_tab = FunctionTab()
         self.log_view = LogView()
         self.image_viewer = ImageViewer()
         self.force_update_image_view = State(0)
