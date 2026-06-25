@@ -50,6 +50,7 @@ from niconavi_app.niconavi.tools.str_parser import (
 )
 from niconavi_app.tools.validation import validation_larger_than_0_float
 from niconavi_app.components.page_tab.tabs.reset_onclick import reset_onclick_cip_computation_button
+from niconavi_app.niconavi.analysis import grain_stat_method_is_supported
 
 
 def onclick_cip_start_button(
@@ -249,49 +250,58 @@ def _make_grain_option(stores: Stores, key: str) -> ft.dropdown.Option:
     return ft.dropdown.Option(text=text, key=value)
 
 
-def make_drop_histogram_at_grain(stores: Stores) -> ReactiveCustomDropDown:
-    return ReactiveCustomDropDown(
-        hint_text=_format_grain_dropdown_text(
-            stores, stores.ui.analysis_tab.grain_histogram_target.get()
-        ),
+def _make_grain_options(stores: Stores) -> list[ft.dropdown.Option]:
+    return [_make_grain_option(stores, key) for key in GrainNumListUsedInPlot]
+
+
+def _make_grain_stat_dropdown(stores: Stores, target_state) -> ReactiveCustomDropDown:
+    dropdown = ReactiveCustomDropDown(
+        hint_text=_format_grain_dropdown_text(stores, target_state.get()),
+        value=to_grain_display(target_state.get()),
         width=200,
-        options=list(
-            map(lambda x: _make_grain_option(stores, x), GrainNumListUsedInPlot)
-        ),
-        on_change=lambda e: stores.ui.analysis_tab.grain_histogram_target.set(
-            inv_grain_display(e.control.value)
-        ),
+        options=_make_grain_options(stores),
     )
+
+    def refresh_dropdown_labels() -> None:
+        dropdown.options = _make_grain_options(stores)
+        dropdown.hint_text = _format_grain_dropdown_text(stores, target_state.get())
+        dropdown.value = to_grain_display(target_state.get())
+        dropdown.update()
+
+    stores.ui.one_pixel.bind(refresh_dropdown_labels)
+    target_state.bind(refresh_dropdown_labels)
+    stores.computation_result.grain_list.bind(refresh_dropdown_labels)
+    return dropdown
+
+
+def make_drop_histogram_at_grain(stores: Stores) -> ReactiveCustomDropDown:
+    dropdown = _make_grain_stat_dropdown(
+        stores, stores.ui.analysis_tab.grain_histogram_target
+    )
+    dropdown.on_change = lambda e: stores.ui.analysis_tab.grain_histogram_target.set(
+        inv_grain_display(e.control.value)
+    )
+    return dropdown
 
 
 def make_drop_scatter_target_x(stores: Stores) -> ReactiveCustomDropDown:
-    return ReactiveCustomDropDown(
-        hint_text=_format_grain_dropdown_text(
-            stores, stores.ui.analysis_tab.scatter_target_x.get()
-        ),
-        width=200,
-        options=list(
-            map(lambda x: _make_grain_option(stores, x), GrainNumListUsedInPlot)
-        ),
-        on_change=lambda e: stores.ui.analysis_tab.scatter_target_x.set(
-            inv_grain_display(e.control.value)
-        ),
+    dropdown = _make_grain_stat_dropdown(
+        stores, stores.ui.analysis_tab.scatter_target_x
     )
+    dropdown.on_change = lambda e: stores.ui.analysis_tab.scatter_target_x.set(
+        inv_grain_display(e.control.value)
+    )
+    return dropdown
 
 
 def make_drop_scatter_target_y(stores: Stores) -> ReactiveCustomDropDown:
-    return ReactiveCustomDropDown(
-        hint_text=_format_grain_dropdown_text(
-            stores, stores.ui.analysis_tab.scatter_target_y.get()
-        ),
-        width=200,
-        options=list(
-            map(lambda x: _make_grain_option(stores, x), GrainNumListUsedInPlot)
-        ),
-        on_change=lambda e: stores.ui.analysis_tab.scatter_target_y.set(
-            inv_grain_display(e.control.value)
-        ),
+    dropdown = _make_grain_stat_dropdown(
+        stores, stores.ui.analysis_tab.scatter_target_y
     )
+    dropdown.on_change = lambda e: stores.ui.analysis_tab.scatter_target_y.set(
+        inv_grain_display(e.control.value)
+    )
+    return dropdown
 
 
 # def make_CIP_no_and_ne_input(stores: Stores) -> tuple[ReactiveFloatTextField, ReactiveFloatTextField]:
@@ -322,6 +332,84 @@ def make_pixel_or_grain_radio_button(stores: Stores) -> ft.RadioGroup:
         on_change=lambda e: stores.ui.analysis_tab.computation_unit.set(
             e.control.value
         ),
+    )
+
+
+class ReactiveDisabledRadioGroup(ft.RadioGroup):
+    def __init__(
+        self,
+        disabled: ReactiveState[bool],
+        visible: ReactiveState[bool] | bool = True,
+        active_value_state=None,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._disabled = disabled
+        self._visible = visible
+        self._active_value_state = active_value_state
+        self.disabled = disabled.get()
+        self.visible = visible.get() if isinstance(visible, ReactiveState) else visible
+        if self.disabled:
+            self.value = None
+        disabled.bind(lambda: self._update_reactive_props())
+        if isinstance(visible, ReactiveState):
+            visible.bind(lambda: self._update_reactive_props())
+        if active_value_state is not None:
+            active_value_state.bind(lambda: self._update_reactive_props())
+
+    def _update_reactive_props(self) -> None:
+        self.disabled = self._disabled.get()
+        self.visible = (
+            self._visible.get()
+            if isinstance(self._visible, ReactiveState)
+            else self._visible
+        )
+        if self.disabled:
+            self.value = None
+        elif self._active_value_state is not None:
+            self.value = self._active_value_state.get()
+        self.update()
+
+
+def make_grain_stat_method_radio(
+    stores: Stores,
+    *,
+    label: str,
+    target_state,
+    method_state,
+    visible: ReactiveState[bool],
+) -> ft.Row:
+    supported = ReactiveState(
+        lambda: grain_stat_method_is_supported(target_state.get()),
+        [target_state],
+    )
+    disabled = ReactiveState(lambda: not supported.get(), [supported])
+
+    def on_change(e: ft.ControlEvent) -> None:
+        if supported.get():
+            method_state.set(e.control.value)
+            force_update_image_view(stores)
+
+    radio = ReactiveDisabledRadioGroup(
+        disabled=disabled,
+        visible=visible,
+        active_value_state=method_state,
+        content=ft.Row(
+            [
+                CustomRadio(value="median", label="median"),
+                CustomRadio(value="mean", label="mean"),
+            ],
+            spacing=6,
+        ),
+        value=method_state.get(),
+        on_change=on_change,
+    )
+
+    return ReactiveRow(
+        [CustomText(label), radio],
+        visible=visible,
+        spacing=8,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
     )
 
 
@@ -618,6 +706,20 @@ class AnalysisTab(ft.Container):
         # drop_rose_diagram_at_pixel = make_drop_rose_diagram_at_pixel(stores)
         drop_histogram = make_drop_histogram_at_grain(stores)
         histogram_log_x_checkbox = make_histogram_log_checkbox(stores)
+        rose_stat_method = make_grain_stat_method_radio(
+            stores,
+            label="Grain value",
+            target_state=stores.ui.analysis_tab.grain_rose_diagram_target,
+            method_state=stores.ui.analysis_tab.rose_stat_method,
+            visible=visible_rose_diagram,
+        )
+        histogram_stat_method = make_grain_stat_method_radio(
+            stores,
+            label="Grain value",
+            target_state=stores.ui.analysis_tab.grain_histogram_target,
+            method_state=stores.ui.analysis_tab.histogram_stat_method,
+            visible=visible_histogram,
+        )
 
         def _on_histogram_alpha_change(value: float) -> None:
             stores.ui.analysis_tab.histogram_alpha.set(value)
@@ -636,6 +738,20 @@ class AnalysisTab(ft.Container):
         )
         drop_scatter_target_x = make_drop_scatter_target_x(stores)
         drop_scatter_target_y = make_drop_scatter_target_y(stores)
+        scatter_x_stat_method = make_grain_stat_method_radio(
+            stores,
+            label="x value",
+            target_state=stores.ui.analysis_tab.scatter_target_x,
+            method_state=stores.ui.analysis_tab.scatter_x_stat_method,
+            visible=visible_scatter,
+        )
+        scatter_y_stat_method = make_grain_stat_method_radio(
+            stores,
+            label="y value",
+            target_state=stores.ui.analysis_tab.scatter_target_y,
+            method_state=stores.ui.analysis_tab.scatter_y_stat_method,
+            visible=visible_scatter,
+        )
         no, ne = make_CIP_no_and_ne_input(stores)
         cip_radio = make_max_R_or_thickness_radio_button(stores)
         pixel_or_grain_radio = make_pixel_or_grain_radio_button(stores)
@@ -696,6 +812,7 @@ class AnalysisTab(ft.Container):
                         ReactiveColumn(
                             [
                                 drop_rose_diagram,
+                                rose_stat_method,
                                 ft.Row(
                                     [
                                         CustomText("Bins"),
@@ -750,6 +867,7 @@ class AnalysisTab(ft.Container):
                             [
                                 # CustomReactiveText("histogram:"),
                                 drop_histogram,
+                                histogram_stat_method,
                                 histogram_log_x_checkbox,
                                 ft.Row(
                                     [
@@ -797,12 +915,14 @@ class AnalysisTab(ft.Container):
                                         drop_scatter_target_x,
                                     ]
                                 ),
+                                scatter_x_stat_method,
                                 ft.Row(
                                     [
                                         CustomText("y:"),
                                         drop_scatter_target_y,
                                     ]
                                 ),
+                                scatter_y_stat_method,
                                 ft.Row([scatter_regression, scatter_origin]),
                                 ft.Row([scatter_log_x, scatter_log_y]),
                             ],

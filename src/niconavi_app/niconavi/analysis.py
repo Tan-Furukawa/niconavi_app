@@ -3,11 +3,14 @@ import scipy.stats as stats
 import matplotlib.colors as mcolors
 import colorsys
 from niconavi_app.niconavi.grain_analysis import reconstruct_grain_mask
+from copy import copy, deepcopy
 from typing import Callable, Literal, TypeVar, Optional, Any, overload
 from niconavi_app.niconavi.tools.grain_plot import detect_boundaries
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import cv2
+from niconavi_app.niconavi.image.image import create_outside_circle_mask
 from niconavi_app.niconavi.tools.type import (
     is_not_None_list,
     D2BoolArray,
@@ -30,6 +33,125 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import Figure, Axes
 import traceback
+
+
+GrainStatisticMethod = Literal["median", "mean"]
+
+GRAIN_PIXEL_STAT_SOURCE_MAP: dict[str, str] = {
+    "R": "max_retardation_map",
+    "extinction_angle": "extinction_angle",
+    "azimuth": "azimuth",
+    "inclination": "inclination",
+    "pR": "p45_R_map",
+    "mR": "m45_R_map",
+    "V": "R_color_map:HSV_V",
+}
+
+GRAIN_PERIODIC_STAT_CYCLE: dict[str, float] = {
+    "extinction_angle": 90.0,
+    "azimuth": 180.0,
+}
+
+
+def grain_stat_method_is_supported(target: str) -> bool:
+    return target in GRAIN_PIXEL_STAT_SOURCE_MAP
+
+
+def _get_grain_stat_source_map(
+    params: ComputationResult,
+    source_key: str,
+) -> Optional[np.ndarray]:
+    raw_maps = params.raw_maps
+    if raw_maps is None:
+        return None
+    if source_key == "R_color_map:HSV_V":
+        r_color_map = raw_maps.get("R_color_map")
+        if r_color_map is None:
+            return None
+        return cv2.cvtColor(r_color_map, cv2.COLOR_RGB2HSV)[:, :, 2]
+    return raw_maps.get(source_key)  # type: ignore[literal-required]
+
+
+def _circular_mean_for_cycle(values: np.ndarray, cycle: float) -> Optional[float]:
+    if values.size == 0:
+        return None
+    angles_rad = 2.0 * np.pi * (values / cycle)
+    c = float(np.mean(np.cos(angles_rad)))
+    s = float(np.mean(np.sin(angles_rad)))
+    if np.isclose(c, 0.0) and np.isclose(s, 0.0):
+        return None
+    angle_rad = np.arctan2(s, c)
+    if angle_rad < 0:
+        angle_rad += 2.0 * np.pi
+    return float((angle_rad / (2.0 * np.pi)) * cycle)
+
+
+def _aggregate_grain_pixel_values(
+    values: np.ndarray,
+    target: str,
+    method: GrainStatisticMethod,
+) -> Optional[float]:
+    values = np.asarray(values, dtype=float)
+    values = values[~np.isnan(values)]
+    if values.size == 0:
+        return None
+
+    cycle = GRAIN_PERIODIC_STAT_CYCLE.get(target)
+    if method == "mean":
+        if cycle is not None:
+            return _circular_mean_for_cycle(values, cycle)
+        return float(np.mean(values))
+
+    if cycle is not None:
+        from niconavi_app.niconavi.statistics.array_to_float import circular_median
+
+        return circular_median(0.0, cycle, int(cycle))(D1FloatArray(values))
+    return float(np.median(values))
+
+
+def _grain_is_fully_inside_circle(grain: Grain, outside_circle_mask: D2BoolArray) -> bool:
+    mask = reconstruct_grain_mask(grain)
+    return bool(np.any(mask & ~outside_circle_mask) and not np.any(mask & outside_circle_mask))
+
+
+def make_params_for_grain_statistics(
+    params: ComputationResult,
+    target_methods: dict[str, GrainStatisticMethod],
+) -> ComputationResult:
+    if params.grain_list is None:
+        return params
+
+    shape = params.grain_list[0]["original_shape"] if params.grain_list else None
+    if shape is None:
+        return params
+
+    outside_circle_mask = create_outside_circle_mask(np.zeros(shape, dtype=np.uint8))
+    converted = copy(params)
+    converted.grain_list = deepcopy(params.grain_list)
+    assert converted.grain_list is not None
+
+    for grain in converted.grain_list:
+        grain_inside = _grain_is_fully_inside_circle(grain, outside_circle_mask)
+        if not grain_inside:
+            for target in target_methods:
+                grain[target] = None  # type: ignore[literal-required]
+            continue
+
+        grain_mask = reconstruct_grain_mask(grain) & ~outside_circle_mask
+        for target, method in target_methods.items():
+            source_key = GRAIN_PIXEL_STAT_SOURCE_MAP.get(target)
+            if source_key is None:
+                continue
+            source_map = _get_grain_stat_source_map(params, source_key)
+            if source_map is None:
+                continue
+            grain[target] = _aggregate_grain_pixel_values(
+                np.asarray(source_map)[grain_mask],
+                target,
+                method,
+            )  # type: ignore[literal-required]
+
+    return converted
 
 
 def rose_diagram(
@@ -836,6 +958,91 @@ def scatter_for_all_minerals(
             return fig, ax
     else:
         raise ValueError("r.grain_classification_result is None")
+
+
+def _grain_value_by_index(
+    grain_list: list[Grain],
+    target: GrainNumLiteral,
+) -> dict[int, float | int | None]:
+    return {grain["index"]: grain[target] for grain in grain_list}
+
+
+def scatter_for_all_minerals_from_two_params(
+    params_x: ComputationResult,
+    target1: GrainNumLiteral,
+    params_y: ComputationResult,
+    target2: GrainNumLiteral,
+    xlab: Optional[str] = None,
+    ylab: Optional[str] = None,
+    text_color: str = "black",
+    origin: bool = True,
+    display_regression: bool = True,
+    log_x: bool = False,
+    log_y: bool = False,
+) -> tuple[Figure, Axes]:
+    r = params_x.grain_classification_result
+    if r is not None:
+        filtered_gcr = filter_displayed_grain_classification_result(r)
+    else:
+        filtered_gcr = {}
+
+    if params_x.grain_list is None or params_y.grain_list is None:
+        raise ValueError("grain_list should not be None")
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    classification_res = list(filtered_gcr)
+    x_by_index = _grain_value_by_index(params_x.grain_list, target1)
+    y_by_index = _grain_value_by_index(params_y.grain_list, target2)
+    mineral_by_index = {grain["index"]: grain["mineral"] for grain in params_x.grain_list}
+
+    all_pairs: list[tuple[float, float]] = []
+    for mineral in classification_res:
+        pairs: list[tuple[float, float]] = []
+        for grain_index, grain_mineral in mineral_by_index.items():
+            if grain_mineral != mineral:
+                continue
+            x = x_by_index.get(grain_index)
+            y = y_by_index.get(grain_index)
+            if not is_not_none(x) or not is_not_none(y):
+                continue
+            pair = (float(x), float(y))
+            if log_x and pair[0] <= 0:
+                continue
+            if log_y and pair[1] <= 0:
+                continue
+            pairs.append(pair)
+
+        if pairs:
+            xs, ys = zip(*pairs)
+            ax.scatter(xs, ys, color=filtered_gcr[mineral]["color"])
+            all_pairs.extend(pairs)
+
+    if log_x:
+        ax.set_xscale("log")
+    if log_y:
+        ax.set_yscale("log")
+    if xlab is not None:
+        ax.set_xlabel(xlab)
+    if ylab is not None:
+        ax.set_ylabel(ylab)
+
+    if display_regression and len(all_pairs) >= 2:
+        xx = [p[0] for p in all_pairs]
+        yy = [p[1] for p in all_pairs]
+        fig, ax, regression = add_regression_line(
+            fig,
+            ax,
+            D1FloatArray(np.array(xx)),
+            D1FloatArray(np.array(yy)),
+            text_color=text_color,
+            origin=origin,
+            color="magenta",
+            log_x=log_x,
+            log_y=log_y,
+        )
+        ax.set_title(regression)
+
+    return fig, ax
 
 
 if __name__ == "__main__":
