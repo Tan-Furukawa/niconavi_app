@@ -25,7 +25,7 @@ from niconavi_app.niconavi.tools.type import (
     D2BoolArray,
     D1FloatArray,
 )
-from niconavi_app.niconavi.image.image import median_filter
+from niconavi_app.niconavi.image.image import create_outside_circle_mask, median_filter
 from niconavi_app.niconavi.optics.uniaxial_plate import (
     get_spectral_distribution,
     ColorChartInfo,
@@ -35,6 +35,136 @@ from niconavi_app.niconavi.optics.optical_system import (
 )
 from copy import deepcopy
 import cv2
+
+
+TILT_RED_DELTA_TOLERANCE = 0.0
+TILT_MAJORITY_KERNEL_SIZE = 3
+TILT_MAJORITY_ITERATIONS = 3
+
+
+def _scale_value_channel(
+    value: np.ndarray,
+    *,
+    source_median: float,
+    target_median: float,
+) -> np.ndarray:
+    if source_median <= 0:
+        return value
+    return np.clip(value * target_median / source_median, 0, 255)
+
+
+def normalize_tilt_pair_brightness(
+    original_image: RGBPicture,
+    tilted_image: RGBPicture,
+) -> tuple[RGBPicture, RGBPicture]:
+    original = np.asarray(np.clip(original_image, 0, 255), dtype=np.uint8)
+    tilted = np.asarray(np.clip(tilted_image, 0, 255), dtype=np.uint8)
+    valid_mask = ~create_outside_circle_mask(original)
+
+    original_hsv = cv2.cvtColor(original, cv2.COLOR_RGB2HSV).astype(np.float64)
+    tilted_hsv = cv2.cvtColor(tilted, cv2.COLOR_RGB2HSV).astype(np.float64)
+
+    original_median_v = float(np.median(original_hsv[:, :, 2][valid_mask]))
+    tilted_median_v = float(np.median(tilted_hsv[:, :, 2][valid_mask]))
+    target_median_v = (original_median_v + tilted_median_v) / 2.0
+
+    original_hsv[:, :, 2] = _scale_value_channel(
+        original_hsv[:, :, 2],
+        source_median=original_median_v,
+        target_median=target_median_v,
+    )
+    tilted_hsv[:, :, 2] = _scale_value_channel(
+        tilted_hsv[:, :, 2],
+        source_median=tilted_median_v,
+        target_median=target_median_v,
+    )
+
+    return (
+        RGBPicture(cv2.cvtColor(np.clip(original_hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)),
+        RGBPicture(cv2.cvtColor(np.clip(tilted_hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)),
+    )
+
+
+def fill_unresolved_by_nearest_confident_decision(
+    decision: np.ndarray,
+    filled: np.ndarray,
+    valid_mask: np.ndarray,
+) -> np.ndarray:
+    from scipy.ndimage import distance_transform_edt
+
+    if not np.any(filled & valid_mask):
+        return decision
+    nearest_indices = distance_transform_edt(
+        ~(filled & valid_mask),
+        return_distances=False,
+        return_indices=True,
+    )
+    unresolved = valid_mask & ~filled
+    filled_decision = decision.copy()
+    filled_decision[unresolved] = filled_decision[
+        tuple(index[unresolved] for index in nearest_indices)
+    ]
+    return filled_decision
+
+
+def regularize_increase_mask(
+    delta_value: np.ndarray,
+    *,
+    tolerance: float = TILT_RED_DELTA_TOLERANCE,
+    kernel_size: int = TILT_MAJORITY_KERNEL_SIZE,
+    iterations: int = TILT_MAJORITY_ITERATIONS,
+) -> D2BoolArray:
+    if kernel_size < 3 or kernel_size % 2 == 0:
+        raise ValueError("kernel_size must be an odd integer >= 3.")
+
+    valid_mask = ~create_outside_circle_mask(delta_value)
+    confident = valid_mask & (np.abs(delta_value) > tolerance)
+    decision = delta_value > 0
+    filled = confident.copy()
+    kernel = np.ones((kernel_size, kernel_size), dtype=np.float32)
+
+    for _ in range(iterations):
+        unresolved = valid_mask & ~filled
+        if not np.any(unresolved):
+            break
+        positive_count = cv2.filter2D(
+            (filled & decision).astype(np.float32),
+            ddepth=-1,
+            kernel=kernel,
+            borderType=cv2.BORDER_CONSTANT,
+        )
+        negative_count = cv2.filter2D(
+            (filled & ~decision).astype(np.float32),
+            ddepth=-1,
+            kernel=kernel,
+            borderType=cv2.BORDER_CONSTANT,
+        )
+        has_majority = unresolved & (positive_count != negative_count)
+        if not np.any(has_majority):
+            break
+        decision[has_majority] = positive_count[has_majority] > negative_count[has_majority]
+        filled[has_majority] = True
+
+    if np.any(valid_mask & ~filled):
+        decision = fill_unresolved_by_nearest_confident_decision(
+            decision,
+            filled,
+            valid_mask,
+        )
+    return D2BoolArray(decision)
+
+
+def make_red_increase_mask_from_tilt_pair(tilt_image_info: TiltImageResult) -> D2BoolArray:
+    original_image, tilted_image = normalize_tilt_pair_brightness(
+        tilt_image_info["original_image"],
+        tilt_image_info["focused_tilted_image"],
+    )
+    original_red = original_image[:, :, 0].astype(np.float64)
+    tilted_red = tilted_image[:, :, 0].astype(np.float64)
+    return regularize_increase_mask(
+        tilted_red - original_red,
+        tolerance=TILT_RED_DELTA_TOLERANCE,
+    )
 
 
 def make_azimuth_vs_R_full_wave_color_chart(
@@ -205,13 +335,7 @@ def estimate_tilt_direction(
         R_im45 = None
         R_im45_tilt = None
 
-    im0_tilt = im_result0["focused_tilted_image"]
-    im0 = im_result0["original_image"]
-
-    rf, gf, bf = cv2.split(im0_tilt)
-    ro, go, bo = cv2.split(im0)
-
-    become_red = rf.astype(np.float64) - ro.astype(np.float64) > 0
+    become_red = make_red_increase_mask_from_tilt_pair(im_result0)
 
     # res0 = R_im0_tilt - R_im0 > 0
     # res45 = R_im45_tilt - R_im45 > 0
@@ -232,7 +356,7 @@ def estimate_tilt_direction(
         R_im0_tilt=R_im0_tilt,
         R_im45=R_im45,
         R_im45_tilt=R_im45_tilt,
-        become_red_by_tilt=D2BoolArray(become_red),
+        become_red_by_tilt=become_red,
     )
 
 
@@ -273,11 +397,9 @@ def convert_tilt_to_tilt_0_to_180(
         # --------------------------
         # Φ=0のとき(Φはステージの回転角)
         # --------------------------
-        im0_tilt = params.tilt_image_info.tilt_image0["focused_tilted_image"]
-        im0 = params.tilt_image_info.tilt_image0["original_image"]
-        rf, gf, bf = cv2.split(im0_tilt)
-        ro, go, bo = cv2.split(im0)
-        become_red = rf.astype(np.float64) - ro.astype(np.float64) > 0
+        become_red = make_red_increase_mask_from_tilt_pair(
+            params.tilt_image_info.tilt_image0
+        )
         inclination = D2FloatArray(np.degrees(R_to_theta(R_map)))
         inclination_0_to_180_0 = deepcopy(inclination)
         inclination_0_to_180_0[~become_red] = (180 - inclination)[~become_red]
@@ -287,11 +409,9 @@ def convert_tilt_to_tilt_0_to_180(
         # Φ=45のとき(Φはステージの回転角)
         # --------------------------
         if params.tilt_image_info.tilt_image45 is not None:
-            im45_tilt = params.tilt_image_info.tilt_image45["focused_tilted_image"]
-            im45 = params.tilt_image_info.tilt_image45["original_image"]
-            rf, gf, bf = cv2.split(im45_tilt)
-            ro, go, bo = cv2.split(im45)
-            become_red_45 = rf.astype(np.float64) - ro.astype(np.float64) > 0
+            become_red_45 = make_red_increase_mask_from_tilt_pair(
+                params.tilt_image_info.tilt_image45
+            )
 
             inclination_0_to_180_45 = deepcopy(inclination)
 
