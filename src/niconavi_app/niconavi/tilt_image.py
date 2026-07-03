@@ -435,7 +435,14 @@ def align_image_by_phase_correlation(
     # 3. 位相相関を用いて平行移動量 (dx, dy) を推定
     #    phaseCorrelate(ref, target) は
     #    「target をどれだけずらせば ref と重なるか」の (dx, dy) を返す。
-    (dx, dy), _ = cv2.phaseCorrelate(f1, f2)  # type: ignore
+    #    窓関数(Hanning窓)を与えずに呼ぶと、画像端(warpAffineによる黒縁など)の
+    #    不連続がFFTに漏れ込み、粒子模様のような周期的テクスチャがあると
+    #    間違ったピークに位置合わせしてしまうことがある(実際、あるサンプルの
+    #    0°タイルト画像で、窓なしだと応答値0.01程度の誤ったシフトを返し、
+    #    結晶が水平画像に対して右にずれる不具合が発生した。Hanning窓を渡すと
+    #    応答値が0.75程度まで上がり、正しいシフトを検出できることを確認済み)。
+    win = cv2.createHanningWindow((f1.shape[1], f1.shape[0]), cv2.CV_32F)
+    (dx, dy), _ = cv2.phaseCorrelate(f1, f2, win)  # type: ignore
 
     # 4. 平行移動量 (dx, dy) を用いて、img2 をアフィン変換 (warpAffine) で平行移動
     #    M は以下の通り:
