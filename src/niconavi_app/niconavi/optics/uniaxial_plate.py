@@ -108,18 +108,18 @@ def get_quartz_with_sensitive_color_plate_system(
     azimuth: float = np.pi * 1 / 4,
 ) -> Callable[[float], JonesVector]:
 
-    def optical_system(wavelength: float) -> JonesVector:
-        r = jm.rotation(np.pi / 4)
-        rm = jm.rotation(-np.pi / 4)
-        s = r @ jm.sensitive_color_plate(wavelength=wavelength) @ rm
+    # Wavelength-independent, so compute once instead of on every call to
+    # optical_system() (invoked once per wavelength sample).
+    r = jm.rotation(np.pi / 4)
+    rm = jm.rotation(-np.pi / 4)
+    polarizer = jm.polarizer(direction="y")
 
-        # s = jm.identity()
+    def optical_system(wavelength: float) -> JonesVector:
+        s = r @ jm.sensitive_color_plate(wavelength=wavelength) @ rm
 
         quartz = jm.uniaxial_crystal(
             inclination=inclination, azimuth=azimuth, wavelength=wavelength, dz=dz
         )
-
-        polarizer = jm.polarizer(direction="y")
 
         v = polarizer @ s @ quartz @ np.array([1, 0])
         return v

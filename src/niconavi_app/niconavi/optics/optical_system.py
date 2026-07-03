@@ -16,9 +16,13 @@ def get_quartz_system(
     ne: float = 1.553,
 ) -> Callable[[float], JonesVector]:
 
-    def optical_system(wavelength: float) -> JonesVector:
+    # These do not depend on wavelength, so compute them once here instead of
+    # on every call to optical_system() (which is invoked once per wavelength
+    # sample, e.g. 81 times per pixel when building a spectral distribution).
+    s = jm.identity()
+    polarizer = jm.polarizer(direction="y")
 
-        s = jm.identity()
+    def optical_system(wavelength: float) -> JonesVector:
 
         quartz = jm.uniaxial_crystal(
             inclination=inclination,
@@ -28,8 +32,6 @@ def get_quartz_system(
             no=no,
             ne=ne,
         )
-
-        polarizer = jm.polarizer(direction="y")
 
         v = polarizer @ s @ quartz @ np.array([1, 0])
         return v
@@ -44,10 +46,12 @@ def get_quartz_plus_full_wave_system(
     ne: float = 1.553,
 ) -> Callable[[float], JonesVector]:
 
+    r = jm.rotation(np.pi / 4)
+    rm = jm.rotation(-np.pi / 4)
+    polarizer = jm.polarizer(direction="y")
+
     def optical_system(wavelength: float) -> JonesVector:
 
-        r = jm.rotation(np.pi / 4)
-        rm = jm.rotation(-np.pi / 4)
         s = rm @ jm.sensitive_color_plate(R=530, wavelength=wavelength) @ r
 
         quartz = jm.uniaxial_crystal(
@@ -58,8 +62,6 @@ def get_quartz_plus_full_wave_system(
             no=no,
             ne=ne,
         )
-
-        polarizer = jm.polarizer(direction="y")
 
         v = polarizer @ s @ quartz @ np.array([1, 0])
         return v
@@ -72,12 +74,13 @@ def get_full_wave_plate_system(
     R: float,
 ) -> Callable[[float], JonesVector]:
 
+    r = jm.rotation(np.pi / 4)
+    rm = jm.rotation(-np.pi / 4)
+    polarizer = jm.polarizer(direction="y")
+
     def optical_system(wavelength: float) -> JonesVector:
 
-        r = jm.rotation(np.pi / 4)
-        rm = jm.rotation(-np.pi / 4)
         s = r @ jm.sensitive_color_plate(R, wavelength=wavelength) @ rm
-        polarizer = jm.polarizer(direction="y")
 
         return polarizer @ s @ np.array([1, 0])
 
@@ -89,13 +92,14 @@ def get_retardation_system_with_nd_filter(
     nd_filter: float,
     azimuth: float = np.pi / 4,
 ) -> Callable[[float], JonesVector]:
+    f = jm.nd_filter(nd_filter, nd_filter)
+    r = jm.rotation(azimuth)
+    rm = jm.rotation(-azimuth)
+    polarizer = jm.polarizer(direction="y")
+
     def optical_system(wavelength: float) -> JonesVector:
 
-        f = jm.nd_filter(nd_filter, nd_filter)
-        r = jm.rotation(azimuth)
-        rm = jm.rotation(-azimuth)
         s = r @ jm.sensitive_color_plate(R, wavelength=wavelength) @ f @ rm
-        polarizer = jm.polarizer(direction="y")
 
         return polarizer @ s @ np.array([1, 0])
 
@@ -107,13 +111,14 @@ def get_retardation_system(
     azimuth: float = np.pi / 4,
     alpha: float = 1.0,
 ) -> Callable[[float], JonesVector]:
+    r = jm.rotation(azimuth)
+    rm = jm.rotation(-azimuth)
+    a = jm.nd_filter(alpha, alpha)
+    polarizer = jm.polarizer(direction="y")
+
     def optical_system(wavelength: float) -> JonesVector:
 
-        r = jm.rotation(azimuth)
-        rm = jm.rotation(-azimuth)
         s = r @ jm.sensitive_color_plate(R, wavelength=wavelength) @ rm
-        a = jm.nd_filter(alpha, alpha)
-        polarizer = jm.polarizer(direction="y")
 
         return polarizer @ a @ s @ np.array([1, 0])
 
@@ -124,17 +129,18 @@ def get_polar_retardation_system(
     R: float,
     azimuth: float = np.pi / 4,
 ) -> Callable[[float], JonesVector]:
+    r = jm.rotation(azimuth)
+    rm = jm.rotation(-azimuth)
+    r4 = jm.rotation(np.pi / 4)
+    rm4 = jm.rotation(-np.pi / 4)
+    polarizer = jm.polarizer(direction="y")
+    R0 = 570
+
     def optical_system(wavelength: float) -> JonesVector:
 
-        r = jm.rotation(azimuth)
-        rm = jm.rotation(-azimuth)
-        r4 = jm.rotation(np.pi / 4)
-        rm4 = jm.rotation(-np.pi / 4)
-        R0 = 570
         s = r4 @ jm.sensitive_color_plate(R0 / 4, wavelength=wavelength) @ rm4
         p = r @ jm.sensitive_color_plate(R, wavelength=wavelength) @ rm
         s_rev = rm4 @ jm.sensitive_color_plate(R0 / 4, wavelength=wavelength) @ r4
-        polarizer = jm.polarizer(direction="y")
 
         return polarizer @ s_rev @ p @ s @ np.array([1, 0])
 
@@ -145,12 +151,13 @@ def get_mineral_retardation_system(
     R: float,
     azimuth: float = np.pi / 4,
 ) -> Callable[[float], JonesVector]:
+    r = jm.rotation(azimuth)
+    rm = jm.rotation(-azimuth)
+    polarizer = jm.polarizer(direction="y")
+
     def optical_system(wavelength: float) -> JonesVector:
 
-        r = jm.rotation(azimuth)
-        rm = jm.rotation(-azimuth)
         p = r @ jm.sensitive_color_plate(R, wavelength=wavelength) @ rm
-        polarizer = jm.polarizer(direction="y")
 
         return polarizer @ p @ np.array([1, 0])
 
@@ -163,16 +170,17 @@ def get_full_wave_plus_mineral_retardation_system(
     R0: float = 530,
     alpha: float = 1,
 ) -> Callable[[float], JonesVector]:
+    nd_filter = jm.nd_filter(alpha, alpha)
+    r = jm.rotation(-azimuth)
+    rm = jm.rotation(azimuth)
+    r4 = jm.rotation(np.pi / 4)
+    rm4 = jm.rotation(-np.pi / 4)
+    polarizer = jm.polarizer(direction="y")
+
     def optical_system(wavelength: float) -> JonesVector:
 
-        nd_filter = jm.nd_filter(alpha, alpha)
-        r = jm.rotation(-azimuth)
-        rm = jm.rotation(azimuth)
-        r4 = jm.rotation(np.pi / 4)
-        rm4 = jm.rotation(-np.pi / 4)
         p = r @ jm.sensitive_color_plate(R, wavelength=wavelength) @ rm
         s = rm4 @ jm.sensitive_color_plate(R0, wavelength=wavelength) @ r4
-        polarizer = jm.polarizer(direction="y")
 
         return polarizer @ s @ nd_filter @ p @ np.array([1, 0])
 
