@@ -17,6 +17,7 @@ from niconavi_app.niconavi.tools.type import (
     D2IntArray,
     D2FloatArray,
     D2BoolArray,
+    D3FloatArray,
 )
 from niconavi_app.niconavi.type import ComputationResult, TiltImageResult, OpticalParameters, RawMaps
 from niconavi_app.niconavi.optics.uniaxial_plate import (
@@ -41,10 +42,25 @@ class ColorChartInfosOfTiltedImage(TypedDict):
     minus_tilted: ColorChartInfo
 
 
+def compute_sharpness_stack(images: list[RGBPicture]) -> D3FloatArray:
+    """
+    各フレームの局所シャープネス (|Laplacian|) マップを (N, H, W) のfloat32配列として返す。
+    argmaxの結果はCV_64FでもCV_32Fでも変わらないため、より軽量なCV_32Fで計算する。
+    """
+    if len(images) == 0:
+        raise ValueError("画像リストが空です。")
+
+    measures = []
+    for img in images:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        measures.append(np.abs(cv2.Laplacian(gray, cv2.CV_32F)))
+
+    return cast(D3FloatArray, np.stack(measures, axis=0))
+
+
 def get_focus_index(images: list[RGBPicture]) -> D2IntArray:
     """
-    複数の画像から、各ピクセルごとにもっともピントの合った部分を抜き出し、
-    1枚の合成画像 (result) と、各ピクセルにおける採用画像のインデックスマップ (selected_idx_map) を返す。
+    複数の画像から、各ピクセルごとにもっともピントの合った画像のインデックスマップを返す。
 
     Parameters
     ----------
@@ -54,33 +70,11 @@ def get_focus_index(images: list[RGBPicture]) -> D2IntArray:
 
     Returns
     -------
-    result : np.ndarray
-        焦点合成された画像（BGR, 3チャンネル）
     selected_idx_map : np.ndarray
         2次元配列 (height, width)。各ピクセルで採用された画像のインデックスが格納される。
     """
-
-    if len(images) == 0:
-        raise ValueError("画像リストが空です。")
-
-    # 各画像をグレースケール化 -> Laplacianでシャープネスを測る。
-    # argmaxの結果はCV_64FでもCV_32Fでも変わらないため、より軽量なCV_32Fで計算する。
-    # (N, H, W)のスタックを作らず、逐次的に最大値を更新することでメモリコピーを削減する。
-    best_measure: D2FloatArray | None = None
-    selected_idx_map: D2IntArray | None = None
-    for i, img in enumerate(images):
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        measure = np.abs(cv2.Laplacian(gray, cv2.CV_32F))
-        if best_measure is None:
-            best_measure = measure
-            selected_idx_map = np.zeros(measure.shape, dtype=np.uint8)
-        else:
-            better = measure > best_measure
-            best_measure = np.where(better, measure, best_measure)
-            selected_idx_map = np.where(better, i, selected_idx_map).astype(np.uint8)
-
-    assert selected_idx_map is not None
-    return selected_idx_map
+    sharpness_stack = compute_sharpness_stack(images)
+    return cast(D2IntArray, np.argmax(sharpness_stack, axis=0).astype(np.uint8))
 
 
 def ransac_plane_fitting_2d(
@@ -311,26 +305,39 @@ def linear_transform_image(
 
 def focus_stack(
     img_list: list[RGBPicture],
+    index_denoise_ksize: int = 5,
 ) -> tuple[RGBPicture, D2IntArray, float, float]:
 
     div_n = len(img_list)
     if len(img_list) > 255:
         raise ValueError("length of img_stack should less than 255")
-    index_mat = get_focus_index(img_list)
+
+    sharpness_stack = compute_sharpness_stack(img_list)
+    index_mat = cast(D2IntArray, np.argmax(sharpness_stack, axis=0).astype(np.uint8))
+
+    # 傾いた焦点面の向き(azimuth/tilt角)を推定するためだけにRANSACで
+    # ロバストな平面をフィットする。試料面はテクスチャの少ない領域では
+    # per-pixel argmaxがノイズに弱いため、フィット自体は大きくスムージング
+    # ＆ダウンサンプルした index_mat で行う。
     _index_mat = resize_img(cast(MonoColorPicture, index_mat.astype(np.uint8)), 1000)
     _index_mat = median_filter(_index_mat, 21)
     _index_mat = resize_img(_index_mat, 200)
 
-    _img, angle_with_x, angle_with_xy = ransac_plane_fitting_2d(
+    _, angle_with_x, angle_with_xy = ransac_plane_fitting_2d(
         cast(D2FloatArray, _index_mat.astype(np.float64))
     )
 
-    _img = np.clip(_img, 0, div_n)  # type: ignore
-    _img = cast(MonoColorPicture, _img.astype(np.uint8))  # type: ignore
-    _img = resize_img(_img, height=index_mat.shape[0], width=index_mat.shape[1])  # type: ignore
-    index = cast(D2IntArray, _img.astype(np.int32))
-    # plt.imshow(index)
-    # plt.show()
+    # 合成に使うインデックスは、上のRANSAC平面(3パラメータのみの理想平面)を
+    # そのまま採用しない。試料面はわずかな凹凸や研磨面の傾きムラで完全な
+    # 平面からずれるため、全画素を理想平面へ押し込めると画像全体が
+    # ぼやける(粒界の境界が甘くなる)。一方、生のper-pixel argmaxは粒界は
+    # シャープだがテクスチャの少ない粒内でノイズが乗る。
+    # 小さいカーネルのメディアンフィルタで、粒界のシャープさを保ったまま
+    # そのノイズだけを取り除く。
+    index = cast(
+        D2IntArray, median_filter(index_mat, index_denoise_ksize).astype(np.int32)
+    )
+
     stacked_img = display_indexed_image(img_list, index)
 
     return (
