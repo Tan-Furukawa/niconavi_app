@@ -63,21 +63,23 @@ def get_focus_index(images: list[RGBPicture]) -> D2IntArray:
     if len(images) == 0:
         raise ValueError("画像リストが空です。")
 
-    # 各画像をグレースケール化 -> Laplacianでシャープネスを測る
-    measure_stack = []
-    for img in images:
+    # 各画像をグレースケール化 -> Laplacianでシャープネスを測る。
+    # argmaxの結果はCV_64FでもCV_32Fでも変わらないため、より軽量なCV_32Fで計算する。
+    # (N, H, W)のスタックを作らず、逐次的に最大値を更新することでメモリコピーを削減する。
+    best_measure: D2FloatArray | None = None
+    selected_idx_map: D2IntArray | None = None
+    for i, img in enumerate(images):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        lap = cv2.Laplacian(gray, cv2.CV_64F)
-        measure = np.abs(lap)
-        measure_stack.append(measure)
+        measure = np.abs(cv2.Laplacian(gray, cv2.CV_32F))
+        if best_measure is None:
+            best_measure = measure
+            selected_idx_map = np.zeros(measure.shape, dtype=np.uint8)
+        else:
+            better = measure > best_measure
+            best_measure = np.where(better, measure, best_measure)
+            selected_idx_map = np.where(better, i, selected_idx_map).astype(np.uint8)
 
-    # (N, H, W)の3次元配列にスタック
-    measure_stack = np.stack(measure_stack, axis=0)
-
-    # 各ピクセルにおいて最大シャープネスを示す画像のインデックスを取得
-    # max_idx.shape => (height, width)
-    selected_idx_map = np.argmax(measure_stack, axis=0).astype(np.uint8)
-
+    assert selected_idx_map is not None
     return selected_idx_map
 
 
@@ -123,7 +125,11 @@ def ransac_plane_fitting_2d(
         「平面を最も登る方向」ベクトルが x–y 平面となす角 (ラジアン)
     """
 
-    np.random.seed(random_state)
+    # np.random.choice(..., replace=False) を使う旧実装はプールサイズ全体の
+    # permutationを毎回生成するため200回のループで大半の時間を消費していた。
+    # Generator.choice はFloydのアルゴリズムでこれを避けられるため大幅に高速。
+    # また、グローバルなnp.random状態を書き換える副作用も無くなる。
+    rng = np.random.default_rng(random_state)
 
     H, W = image.shape
     # 座標を用意 (x, y)
@@ -148,7 +154,7 @@ def ransac_plane_fitting_2d(
     # --- RANSAC のメインループ ---
     for _ in range(max_iterations):
         # ランダムに3点サンプリング
-        sample_indices = np.random.choice(N_full, size=3, replace=False)
+        sample_indices = rng.choice(N_full, size=3, replace=False)
         X_sample = X_all[sample_indices]  # (3,3)
         Z_sample = Z_all[sample_indices]  # (3,)
 
