@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import inspect
 from io import BytesIO
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -9,6 +11,8 @@ from typing import Any
 import zipfile
 
 import numpy as np
+
+logger = logging.getLogger("niconavi")
 
 from niconavi_app.niconavi.reset_run_all import remove_heavy_objects
 from niconavi_app.niconavi.type import (
@@ -146,6 +150,21 @@ def _deserialize_value(value: Any, archive: zipfile.ZipFile) -> Any:
             key: _deserialize_value(item, archive)
             for key, item in value["fields"].items()
         }
+        accepted_params = inspect.signature(cls.__init__).parameters
+        accepts_kwargs = any(
+            param.kind == inspect.Parameter.VAR_KEYWORD
+            for param in accepted_params.values()
+        )
+        if not accepts_kwargs:
+            unknown_keys = [key for key in fields if key not in accepted_params]
+            for key in unknown_keys:
+                logger.warning(
+                    "Ignoring unknown field '%s' while loading %s from project file "
+                    "(saved by an older/newer version of the app).",
+                    key,
+                    class_name,
+                )
+                del fields[key]
         return cls(**fields)
 
     raise ValueError(f"Unsupported project value type: {value_type}")
