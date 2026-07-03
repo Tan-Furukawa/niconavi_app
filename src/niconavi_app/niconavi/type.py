@@ -461,7 +461,7 @@ class ComputationResult:
         center_int_x: Optional[int] = None,
         center_int_y: Optional[int] = None,
         rotation_img: Optional[MonoColorPicture] = None,
-        # rotation_img_with_mark: Optional[Figure] = None,
+        rotation_img_with_mark: Optional[Figure] = None,
         image_rotation_direction: Optional[
             Literal["clockwise", "counterclockwise"]
         ] = None,
@@ -539,6 +539,7 @@ class ComputationResult:
         self.center_int_x = center_int_x
         self.center_int_y = center_int_y
         self.rotation_img = rotation_img
+        self.rotation_img_with_mark = rotation_img_with_mark
         self.reta_image_rotation_direction = reta_image_rotation_direction
         self.image_rotation_direction = image_rotation_direction
         self.grain_list = grain_list
