@@ -318,10 +318,11 @@ def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Lo
             update_progress_bar(0.0, stores)
             return
 
-        next_count = stores.ui.map_tab.fill_boundary_count.get() + 0.5
-        # elongation_thresh = skeleton_length / area: higher ratio = more elongated (thinner)
-        # starts at 0.5 (removes ~2px-wide lines) and decreases by 0.1 each click
-        elongation_thresh = max(0.05, 0.6 - next_count * 0.2)
+        # max_width starts at 2.0 px and increases by 0.5 px per click
+        # elongation_thresh = 1 / max_width  (ratio >= thresh ↔ avg width <= max_width)
+        prev = stores.ui.map_tab.fill_boundary_count.get()
+        next_count = 2.0 if prev == 0.0 else prev + 0.5
+        elongation_thresh = 1.0 / next_count
         angle_map_info = fill_dark_boundaries_by_elongation(
             angle_map_info,
             elongation_thresh=elongation_thresh,
@@ -646,7 +647,11 @@ class GrainTab(ft.Container):
                         ),
                         CustomReactiveText(
                             ReactiveState(
-                                lambda: f"{stores.ui.map_tab.fill_boundary_count.get():g}",
+                                lambda: (
+                                    f"{stores.ui.map_tab.fill_boundary_count.get():.1f} px"
+                                    if stores.ui.map_tab.fill_boundary_count.get() > 0.0
+                                    else ""
+                                ),
                                 [stores.ui.map_tab.fill_boundary_count],
                             ),
                             visible=has_angle_map_source,
