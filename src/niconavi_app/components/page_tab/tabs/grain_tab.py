@@ -59,6 +59,7 @@ import niconavi_app.niconavi.run_all as po
 from niconavi_app.niconavi.angle_map_boundary import (
     create_shock_filter_iterator,
     fill_dark_boundaries,
+    fill_dark_boundaries_by_elongation,
     grain_boundary_from_angle_labels,
     make_theta_phi_angle_info,
     make_theta_phi_legend_image,
@@ -318,12 +319,12 @@ def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Lo
             return
 
         next_count = stores.ui.map_tab.fill_boundary_count.get() + 0.5
-        angle_map_info = fill_dark_boundaries(
+        # elongation_thresh = skeleton_length / area: higher ratio = more elongated (thinner)
+        # starts at 0.5 (removes ~2px-wide lines) and decreases by 0.1 each click
+        elongation_thresh = max(0.05, 0.6 - next_count * 0.2)
+        angle_map_info = fill_dark_boundaries_by_elongation(
             angle_map_info,
-            dark_l_thresh=None,
-            branch_width_thresh=next_count,
-            max_iterations=3,
-            fixed_skeleton_once=False,
+            elongation_thresh=elongation_thresh,
         )
         stores.ui.map_tab.angle_map_info.set(angle_map_info)
         stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
