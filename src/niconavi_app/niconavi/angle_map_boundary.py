@@ -638,6 +638,64 @@ def fill_dark_boundaries(
     }
 
 
+def fill_dark_boundaries_by_elongation(
+    theta_phi_angle_info: dict[str, Any],
+    *,
+    elongation_thresh: float,
+    min_area: int = 10,
+) -> dict[str, Any]:
+    """Remove elongated dark boundaries using skeleton_length/area ratio.
+
+    Components where skeleton_length/area >= elongation_thresh are treated as
+    thin elongated cracks and reassigned to the nearest non-removed neighbor.
+    Lower elongation_thresh removes more (thicker) elongated regions.
+    """
+    from scipy import ndimage as ndi
+    from skimage.morphology import skeletonize
+
+    labels = np.asarray(
+        theta_phi_angle_info["merged_superpixel_labels"], dtype=np.int32
+    ).copy()
+    base_rgb = _as_uint8_rgb(
+        theta_phi_angle_info.get(
+            "merged_superpixel_median_map",
+            theta_phi_angle_info["superpixel_median_map"],
+        )
+    )
+
+    labels = _split_connected_components(_compact_labels(labels))
+
+    remove_mask = np.zeros(labels.shape, dtype=bool)
+    for label in np.unique(labels[labels >= 0]):
+        region_mask = labels == label
+        area = int(np.count_nonzero(region_mask))
+        if area < min_area:
+            continue
+        skeleton = skeletonize(region_mask)
+        skeleton_length = int(np.count_nonzero(skeleton))
+        if skeleton_length == 0:
+            continue
+        ratio = skeleton_length / area
+        if ratio >= elongation_thresh:
+            remove_mask |= region_mask
+
+    if np.any(remove_mask):
+        target_mask = ~remove_mask
+        _, nearest = ndi.distance_transform_edt(~target_mask, return_indices=True)
+        next_labels = labels.copy()
+        next_labels[remove_mask] = labels[nearest[0][remove_mask], nearest[1][remove_mask]]
+        labels = _split_connected_components(_compact_labels(next_labels))
+
+    cleaned_angle_map = _region_median_color_map(base_rgb, labels)
+    return {
+        **theta_phi_angle_info,
+        "black_artifact_removed_superpixel_labels": labels,
+        "black_artifact_removed_angle_map": cleaned_angle_map,
+        "black_artifact_removed_mask": np.where(remove_mask, 255, 0).astype(np.uint8),
+        "angle_map_display": cleaned_angle_map,
+    }
+
+
 def grain_boundary_from_angle_labels(theta_phi_angle_info: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
     labels = np.asarray(theta_phi_angle_info["black_artifact_removed_superpixel_labels"], dtype=np.int32)
     boundary = detect_boundaries(labels)
