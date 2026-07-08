@@ -643,12 +643,15 @@ def fill_dark_boundaries_by_elongation(
     *,
     elongation_thresh: float,
     min_area: int = 10,
+    neck_thresh: float = 2.0,
 ) -> dict[str, Any]:
     """Remove elongated dark boundaries using skeleton_length/area ratio.
 
-    Components where skeleton_length/area >= elongation_thresh are treated as
-    thin elongated cracks and reassigned to the nearest non-removed neighbor.
-    Lower elongation_thresh removes more (thicker) elongated regions.
+    Each connected component is first split at narrow "neck" points
+    (distance-transform value <= neck_thresh) so that whisker-like protrusions
+    attached to large dark regions are evaluated as independent sub-components.
+    Sub-components where skeleton_length/area >= elongation_thresh are removed
+    and reassigned to the nearest non-removed neighbor.
     """
     from scipy import ndimage as ndi
     from skimage.morphology import skeletonize
@@ -665,19 +668,46 @@ def fill_dark_boundaries_by_elongation(
 
     labels = _split_connected_components(_compact_labels(labels))
 
-    remove_mask = np.zeros(labels.shape, dtype=bool)
-    for label in np.unique(labels[labels >= 0]):
-        region_mask = labels == label
+    def _is_elongated(region_mask: np.ndarray) -> bool:
         area = int(np.count_nonzero(region_mask))
         if area < min_area:
-            continue
+            return False
         skeleton = skeletonize(region_mask)
         skeleton_length = int(np.count_nonzero(skeleton))
         if skeleton_length == 0:
+            return False
+        return skeleton_length / area >= elongation_thresh
+
+    remove_mask = np.zeros(labels.shape, dtype=bool)
+    for label in np.unique(labels[labels >= 0]):
+        region_mask = labels == label
+        if int(np.count_nonzero(region_mask)) < min_area:
             continue
-        ratio = skeleton_length / area
-        if ratio >= elongation_thresh:
-            remove_mask |= region_mask
+
+        # Split at neck pixels (narrow connections between whisker and body)
+        dist = cv2.distanceTransform(region_mask.astype(np.uint8), cv2.DIST_L2, 3)
+        neck_mask = region_mask & (dist <= neck_thresh)
+        body_mask = region_mask & ~neck_mask
+
+        n_sub, sub_labels = cv2.connectedComponents(body_mask.astype(np.uint8), connectivity=8)
+        if n_sub <= 1:
+            # No neck splitting occurred; evaluate the region as a whole
+            if _is_elongated(region_mask):
+                remove_mask |= region_mask
+            continue
+
+        # Assign neck pixels to their nearest sub-component so every pixel is covered
+        _, nearest_sub = ndi.distance_transform_edt(sub_labels == 0, return_indices=True)
+        full_sub_labels = sub_labels.copy()
+        neck_pixels = neck_mask & (sub_labels == 0)
+        full_sub_labels[neck_pixels] = sub_labels[
+            nearest_sub[0][neck_pixels], nearest_sub[1][neck_pixels]
+        ]
+
+        for sub_id in range(1, n_sub):
+            sub_mask = (full_sub_labels == sub_id) & region_mask
+            if _is_elongated(sub_mask):
+                remove_mask |= sub_mask
 
     if np.any(remove_mask):
         target_mask = ~remove_mask
