@@ -638,6 +638,62 @@ def fill_dark_boundaries(
     }
 
 
+def _build_elongation_cache(
+    labels: np.ndarray,
+    *,
+    min_area: int,
+    neck_thresh: float,
+) -> dict[str, Any]:
+    """Pre-compute sub-component label map and elongation ratios (expensive).
+
+    Each connected component in *labels* is first split at "neck" pixels
+    (distance-transform <= neck_thresh), then each resulting sub-component
+    gets a unique integer ID in the returned sub_label_map and its
+    skeleton_length/area ratio is stored in sub_ratios.
+    """
+    from scipy import ndimage as ndi
+    from skimage.morphology import skeletonize
+
+    sub_label_map = np.zeros(labels.shape, dtype=np.int32)
+    sub_ratios: dict[int, float] = {}
+    next_id = 1
+
+    for label in np.unique(labels[labels >= 0]):
+        region_mask = labels == label
+        area = int(np.count_nonzero(region_mask))
+        if area < min_area:
+            continue
+
+        dist = cv2.distanceTransform(region_mask.astype(np.uint8), cv2.DIST_L2, 3)
+        body_mask = region_mask & (dist > neck_thresh)
+        n_sub, cv_sub = cv2.connectedComponents(body_mask.astype(np.uint8), connectivity=8)
+
+        if n_sub <= 1:
+            sub_label_map[region_mask] = next_id
+            skel_len = int(np.count_nonzero(skeletonize(region_mask)))
+            sub_ratios[next_id] = skel_len / area
+            next_id += 1
+            continue
+
+        # Assign neck pixels to the nearest body sub-component
+        _, nearest_sub = ndi.distance_transform_edt(cv_sub == 0, return_indices=True)
+        full_sub = cv_sub.copy()
+        neck_pixels = region_mask & (cv_sub == 0)
+        full_sub[neck_pixels] = cv_sub[nearest_sub[0][neck_pixels], nearest_sub[1][neck_pixels]]
+
+        for sub_id in range(1, n_sub):
+            sub_mask = (full_sub == sub_id) & region_mask
+            sub_area = int(np.count_nonzero(sub_mask))
+            if sub_area < min_area:
+                continue
+            sub_label_map[sub_mask] = next_id
+            skel_len = int(np.count_nonzero(skeletonize(sub_mask)))
+            sub_ratios[next_id] = skel_len / sub_area
+            next_id += 1
+
+    return {"sub_label_map": sub_label_map, "sub_ratios": sub_ratios}
+
+
 def fill_dark_boundaries_by_elongation(
     theta_phi_angle_info: dict[str, Any],
     *,
@@ -647,14 +703,13 @@ def fill_dark_boundaries_by_elongation(
 ) -> dict[str, Any]:
     """Remove elongated dark boundaries using skeleton_length/area ratio.
 
-    Each connected component is first split at narrow "neck" points
-    (distance-transform value <= neck_thresh) so that whisker-like protrusions
-    attached to large dark regions are evaluated as independent sub-components.
-    Sub-components where skeleton_length/area >= elongation_thresh are removed
-    and reassigned to the nearest non-removed neighbor.
+    On the first call the sub-component structure is computed (skeletonize +
+    neck-splitting) and cached inside the returned dict under '_elongation_cache'.
+    Subsequent calls reuse the cache, making them much faster.
+
+    elongation_thresh = 1 / max_width_px, so larger max_width removes wider lines.
     """
     from scipy import ndimage as ndi
-    from skimage.morphology import skeletonize
 
     labels = np.asarray(
         theta_phi_angle_info["merged_superpixel_labels"], dtype=np.int32
@@ -665,49 +720,17 @@ def fill_dark_boundaries_by_elongation(
             theta_phi_angle_info["superpixel_median_map"],
         )
     )
-
     labels = _split_connected_components(_compact_labels(labels))
 
-    def _is_elongated(region_mask: np.ndarray) -> bool:
-        area = int(np.count_nonzero(region_mask))
-        if area < min_area:
-            return False
-        skeleton = skeletonize(region_mask)
-        skeleton_length = int(np.count_nonzero(skeleton))
-        if skeleton_length == 0:
-            return False
-        return skeleton_length / area >= elongation_thresh
+    cache = theta_phi_angle_info.get("_elongation_cache")
+    if cache is None:
+        cache = _build_elongation_cache(labels, min_area=min_area, neck_thresh=neck_thresh)
 
-    remove_mask = np.zeros(labels.shape, dtype=bool)
-    for label in np.unique(labels[labels >= 0]):
-        region_mask = labels == label
-        if int(np.count_nonzero(region_mask)) < min_area:
-            continue
+    sub_label_map: np.ndarray = cache["sub_label_map"]
+    sub_ratios: dict[int, float] = cache["sub_ratios"]
 
-        # Split at neck pixels (narrow connections between whisker and body)
-        dist = cv2.distanceTransform(region_mask.astype(np.uint8), cv2.DIST_L2, 3)
-        neck_mask = region_mask & (dist <= neck_thresh)
-        body_mask = region_mask & ~neck_mask
-
-        n_sub, sub_labels = cv2.connectedComponents(body_mask.astype(np.uint8), connectivity=8)
-        if n_sub <= 1:
-            # No neck splitting occurred; evaluate the region as a whole
-            if _is_elongated(region_mask):
-                remove_mask |= region_mask
-            continue
-
-        # Assign neck pixels to their nearest sub-component so every pixel is covered
-        _, nearest_sub = ndi.distance_transform_edt(sub_labels == 0, return_indices=True)
-        full_sub_labels = sub_labels.copy()
-        neck_pixels = neck_mask & (sub_labels == 0)
-        full_sub_labels[neck_pixels] = sub_labels[
-            nearest_sub[0][neck_pixels], nearest_sub[1][neck_pixels]
-        ]
-
-        for sub_id in range(1, n_sub):
-            sub_mask = (full_sub_labels == sub_id) & region_mask
-            if _is_elongated(sub_mask):
-                remove_mask |= sub_mask
+    remove_ids = [lid for lid, r in sub_ratios.items() if r >= elongation_thresh]
+    remove_mask = np.isin(sub_label_map, remove_ids) if remove_ids else np.zeros(labels.shape, dtype=bool)
 
     if np.any(remove_mask):
         target_mask = ~remove_mask
@@ -719,6 +742,7 @@ def fill_dark_boundaries_by_elongation(
     cleaned_angle_map = _region_median_color_map(base_rgb, labels)
     return {
         **theta_phi_angle_info,
+        "_elongation_cache": cache,
         "black_artifact_removed_superpixel_labels": labels,
         "black_artifact_removed_angle_map": cleaned_angle_map,
         "black_artifact_removed_mask": np.where(remove_mask, 255, 0).astype(np.uint8),
