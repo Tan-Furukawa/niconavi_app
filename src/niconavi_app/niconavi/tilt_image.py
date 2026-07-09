@@ -1,6 +1,7 @@
 # %%
 import matplotlib.pyplot as plt
 from typing import cast, Callable, Optional, TypeVar, TypedDict
+from niconavi_app.app_config import ENABLE_TILT_REF_MEDIAN_CORRECTION
 from niconavi_app.niconavi.image.image import (
     rotate_array,
     resize_img,
@@ -693,6 +694,9 @@ def normalize_by_gray_scale(
     target_img: RGBPicture,
     mask: Optional[D2BoolArray] = None,
 ) -> RGBPicture:
+    if not ENABLE_TILT_REF_MEDIAN_CORRECTION:
+        return RGBPicture(np.asarray(target_img, dtype=np.uint8))
+
     im1 = standard_img
     im2 = target_img
     im1_hsv = cv2.cvtColor(im1, cv2.COLOR_RGB2HSV).astype(np.float64)

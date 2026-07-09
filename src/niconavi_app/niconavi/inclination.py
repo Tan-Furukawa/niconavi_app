@@ -20,6 +20,7 @@ from niconavi_app.niconavi.retardation_normalization import (
 from niconavi_app.niconavi.make_map import add_color_V_to_img
 import numpy as np
 import matplotlib.pyplot as plt
+from niconavi_app.app_config import ENABLE_TILT_REF_MEDIAN_CORRECTION
 from niconavi_app.niconavi.tools.type import (
     D2FloatArray,
     D2BoolArray,
@@ -59,6 +60,9 @@ def normalize_tilt_pair_brightness(
 ) -> tuple[RGBPicture, RGBPicture]:
     original = np.asarray(np.clip(original_image, 0, 255), dtype=np.uint8)
     tilted = np.asarray(np.clip(tilted_image, 0, 255), dtype=np.uint8)
+    if not ENABLE_TILT_REF_MEDIAN_CORRECTION:
+        return RGBPicture(original), RGBPicture(tilted)
+
     valid_mask = ~create_outside_circle_mask(original)
 
     original_hsv = cv2.cvtColor(original, cv2.COLOR_RGB2HSV).astype(np.float64)

@@ -8,4 +8,7 @@ RColorMapSource = Literal["brightest_angle", "extinction_angle", "extinction_col
 # Application-wide fixed settings. These values are intentionally not exposed
 # through the GUI and should be changed only by editing this module.
 R_COLOR_MAP_SOURCE: RColorMapSource = "extinction_color_map"
+
 ENABLE_FUNCTION_TAB = False
+
+ENABLE_TILT_REF_MEDIAN_CORRECTION = False
