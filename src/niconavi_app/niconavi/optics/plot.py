@@ -476,6 +476,16 @@ def plot_as_stereo_projection(
     elif azimuth_range_max == 180:
         ax.plot(v, np.zeros_like(v), "--", color="gray")
 
+    # White S/E/N/W direction labels along the x/y axes. Display convention
+    # (coordinate.md): azimuth measured counterclockwise from W, so with
+    # x = r cos(az), y = r sin(az) the axis ends are W=right, S=top, E=left,
+    # N=bottom.
+    label_kwargs = dict(color="white", fontsize=12, fontweight="bold")
+    ax.text(1.02, 0.0, "W", ha="left", va="center", **label_kwargs)
+    ax.text(0.0, 1.02, "S", ha="center", va="bottom", **label_kwargs)
+    ax.text(-1.02, 0.0, "E", ha="right", va="center", **label_kwargs)
+    ax.text(0.0, -1.02, "N", ha="center", va="top", **label_kwargs)
+
     ax.set_aspect("equal")
     ax.set_axis_off()
     fig.tight_layout(pad=0)
