@@ -234,6 +234,15 @@ class AnalysisTab:
         self.cip_theme: State[str] = State("jet")
         self.cip_display_points: State[bool] = State(False)
         self.cip_points_noise_size_percent: State[float] = State(0.5)
+        # CPO 90 deg normalize (default on): rescale the selected grains'
+        # inclination so their P95 maps to 90 deg (see cpo_normalization).
+        self.cip_normalize_90: State[bool] = State(True)
+        # Info panel text for the CPO plot, set when "calculate" is pressed:
+        # which grains were used, the M/b/alpha fit, and (when normalize is on)
+        # the predicted thickness. Non-interactive - not tied to grain toggles.
+        self.cip_stats_text: State[str] = State(
+            "Press calculate to compute CPO."
+        )
         self.histogram_stats_text: State[str] = State(
             "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
         )

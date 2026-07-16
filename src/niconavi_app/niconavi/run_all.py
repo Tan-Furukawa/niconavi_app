@@ -14,6 +14,9 @@ from niconavi_app.niconavi.optics.tools import normalize_axes
 from niconavi_app.niconavi.tilt_image import (
     estimate_tilted_image,
 )
+from niconavi_app.niconavi.tilt_registration import (
+    estimate_tilt_image_result_poc,
+)
 from copy import deepcopy
 import traceback
 import matplotlib.pyplot as plt
@@ -251,86 +254,27 @@ def estimate_tilt_image_result(
     params: ComputationResult,
     progress_callback: Callable[[float | None], None] = lambda p: None,
 ) -> ComputationResult:
-
+    # Tilt-pair registration now uses phase-only correlation (POC) - a bounded
+    # POC coarse shift plus a fine aspect/shift Powell step - matching the
+    # ebsd_adjustment_v3 make_data.py pipeline. estimate_tilt_image_result_poc
+    # is a drop-in replacement building the same TiltImageResult contract
+    # (including the color_change field). See niconavi.tilt_registration.
     progress_callback(None)
 
-    alpha = params.color_chart.pol_lambda_alpha
-    im0 = params.tilt_image_info.image0_raw
-    im_tilt0 = params.tilt_image_info.tilt_image0_raw
-
-    im45 = params.tilt_image_info.image45_raw
-    im_tilt45 = params.tilt_image_info.tilt_image45_raw
-    angle_of_image45 = params.angle_between_x_and_thin_section_axis_at_tilt
-
-    theta_deg = params.tilt_image_info.theta_thin_section
-    center_x = params.center_int_x
-    center_y = params.center_int_y
-
-    if params.raw_maps is not None:
-        ex_angle_map = params.raw_maps["extinction_angle"]
-        shape = (ex_angle_map.shape[0], ex_angle_map.shape[1])
-        # im0とim_tilt0は必須
-        if (
-            alpha is not None
-            and im0 is not None
-            and im_tilt0 is not None
-            and center_x is not None
-            and center_y is not None
-            and params.raw_maps is not None
-        ):
-            center = (center_x, center_y)
-            im_result0 = estimate_tilted_image(
-                im0,
-                im_tilt0,
-                np.radians(theta_deg),
-                center=center,
-                shape=shape,
-            )
-
-            # ------------------------------
-            # 45°傾き画像が存在するとき
-            # ------------------------------
-            if im45 is not None and im_tilt45 is not None:
-                im_result45 = estimate_tilted_image(
-                    im45,
-                    im_tilt45,
-                    np.radians(theta_deg),
-                    center=center,
-                    shape=shape,
-                    rotation=-angle_of_image45,
-                )
-                return ComputationResult(
-                    **{
-                        **params.__dict__,
-                        "tilt_image_info": TiltImageInfo(
-                            **{
-                                **params.tilt_image_info.__dict__,
-                                "tilt_image0": im_result0,
-                                "tilt_image45": im_result45,
-                            }
-                        ),
-                    }
-                )
-            # ------------------------------
-            # 45°傾き画像が存在しないとき
-            # ------------------------------
-            else:
-                return ComputationResult(
-                    **{
-                        **params.__dict__,
-                        "tilt_image_info": TiltImageInfo(
-                            **{
-                                **params.tilt_image_info.__dict__,
-                                "tilt_image0": im_result0,
-                            }
-                        ),
-                    }
-                )
-        else:
-            return params
-
-    else:
+    if params.raw_maps is None:
         raise ValueError("params.raw_maps is None")
+
+    # The POC path does not need the lambda-plate alpha to register; it only
+    # needs the raw 0 deg reference/tilt frame lists and the image center.
+    if (
+        params.tilt_image_info.image0_raw is None
+        or params.tilt_image_info.tilt_image0_raw is None
+        or params.center_int_x is None
+        or params.center_int_y is None
+    ):
+        return params
+
+    return estimate_tilt_image_result_poc(params)
 
 
 def find_image_center(
