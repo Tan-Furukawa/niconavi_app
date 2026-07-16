@@ -117,6 +117,8 @@ def reset_button_click(stores: Stores, *, logger: Logger) -> None:
     save_in_ComputationResultState(r, stores)
     stores.ui.once_start.set(False)
     stores.ui.progress.set(0)
+    # Bring back the "check prompt" red buttons after a full reset.
+    stores.ui.map_tab.acknowledged_prompt_buttons.set(frozenset())
 
 
 def recalculate_maps_click(stores: Stores, *, logger: Logger) -> None:
@@ -131,6 +133,9 @@ def recalculate_maps_click(stores: Stores, *, logger: Logger) -> None:
         r = reset_onclick_recalculate_button(r)
 
         save_in_ComputationResultState(r, stores)
+
+        # Recompute invalidates prior visual checks: prompt the user again.
+        stores.ui.map_tab.acknowledged_prompt_buttons.set(frozenset())
 
         update_logs(stores, ("Starting recalculation...", "msg"), logger=logger)
         update_logs(stores, ("Simulating retardation colors...", "msg"), logger=logger)

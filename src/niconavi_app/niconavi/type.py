@@ -1,5 +1,5 @@
 # %%
-from typing import TypedDict, Literal, Optional, TypeAlias, TypeGuard
+from typing import TypedDict, Literal, Optional, TypeAlias, TypeGuard, NotRequired
 from matplotlib.pyplot import Figure, Axes
 from niconavi_app.niconavi.tools.type import (
     D2BoolArray,
@@ -98,6 +98,10 @@ class RawMaps(TypedDict):  # make_AcceptedLiteral
     inclination: Optional[D2FloatArray]
     inclination_0_to_180: Optional[D2FloatArray]
     azimuth360: Optional[D2FloatArray]
+    # Addition image (相加画像): per-pixel composite of the phi_ex +/- 45 deg
+    # XPL+lambda color maps, selecting the frame the azimuth convention treats
+    # as "c-axis on the lambda slow axis". None when p45/m45 maps are absent.
+    add_image: Optional[RGBPicture]
     # tilt_direction_estimation_result: Optional[TiltDirectionEstimationResult]
 
 
@@ -328,6 +332,10 @@ class TiltImageResult(TypedDict):
     focused_index: D2IntArray
     image_mask: D2BoolArray
     azimuth_thin_section: float
+    # Signed RGB color change from tilting: original(tilt) - original(before
+    # tilt), gray-centered for display (clip((after/255 - before/255)*3 + 0.5,
+    # 0, 1) * 255). Absent on results built before this field existed.
+    color_change: NotRequired[RGBPicture]
     # original_retardation: D2FloatArray
     # tilted_retardation: D2FloatArray
 

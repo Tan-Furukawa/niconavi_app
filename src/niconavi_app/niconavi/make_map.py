@@ -602,6 +602,7 @@ def make_R_maps(
         return {
             **raw_maps,
             "max_retardation_map": R_map,
+            "add_image": None,
         }
     else:
         p45_R_map, _, _ = make_retardation_color_map(
@@ -674,12 +675,23 @@ def make_R_maps(
         azimuth[p_larger_than_m] = 180 - extinction_angle[p_larger_than_m]
         azimuth[~p_larger_than_m] = 90 - extinction_angle[~p_larger_than_m]
 
+        # Addition image (相加画像): pick, per pixel, the phi_ex +/- 45 deg
+        # XPL+lambda color frame with the larger retardation - the same
+        # p45_R_map >= m45_R_map rule the azimuth convention uses, i.e. the
+        # frame that places the (length-slow) c-axis on the lambda slow axis.
+        add_image = np.where(
+            p_larger_than_m[..., None],
+            np.asarray(p45_R_color_map),
+            np.asarray(m45_R_color_map),
+        ).astype(np.uint8)
+
         return {
             **raw_maps,
             "max_retardation_map": R_map,
             "m45_R_map": m45_R_map,
             "p45_R_map": p45_R_map,
             "azimuth": azimuth,
+            "add_image": RGBPicture(add_image),
         }
 
 
