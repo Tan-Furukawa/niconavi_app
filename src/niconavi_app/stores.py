@@ -263,6 +263,11 @@ class MapTab:
         self.segmentation_done: State[bool] = State(False)
         self.fill_boundary_started: State[bool] = State(False)
         self.boundary_registered: State[bool] = State(False)
+        # image-list buttons the user is prompted to check (shown red until
+        # clicked once). Holds the grain-tab button indices already
+        # acknowledged; cleared on recalculate / reset all so the prompt
+        # returns. See make_check_prompt_button.
+        self.acknowledged_prompt_buttons: State[frozenset[int]] = State(frozenset())
 
 
 class FunctionTab:

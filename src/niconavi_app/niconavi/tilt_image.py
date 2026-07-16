@@ -678,15 +678,35 @@ def estimate_tilted_image(
 
     # tilted_retardation = resize_array(tilt, w_original, h_original)
 
+    original_image = resize_img(rim, w_original, h_original)
+    focused_tilted_image = resize_img(mod_tilt_img, w_original, h_original)
+
     return TiltImageResult(
-        original_image=resize_img(rim, w_original, h_original),
-        focused_tilted_image=resize_img(mod_tilt_img, w_original, h_original),
+        original_image=original_image,
+        focused_tilted_image=focused_tilted_image,
         focused_index=r_focused_index,
         image_mask=(r_mask == 1),
         azimuth_thin_section=azimuth_thin_section,
+        color_change=make_tilt_color_change_image(
+            before=original_image, after=focused_tilted_image
+        ),
         # original_retardation=r_original_retardation,
         # tilted_retardation=tilted_retardation,
     )
+
+
+def make_tilt_color_change_image(
+    before: RGBPicture, after: RGBPicture
+) -> RGBPicture:
+    """Gray-centered, signed RGB color change from tilting: original(tilt) -
+    original(before tilt). Matches the ebsd_adjustment_v3 "original color
+    change" panel display, clip((after/255 - before/255)*3 + 0.5, 0, 1),
+    scaled back to 0..255 uint8. The x3 gain makes the small tilt-induced
+    change visible; 0.5 puts "no change" at neutral gray."""
+    before_unit = np.asarray(before, dtype=np.float64) / 255.0
+    after_unit = np.asarray(after, dtype=np.float64) / 255.0
+    delta = np.clip((after_unit - before_unit) * 3.0 + 0.5, 0.0, 1.0)
+    return RGBPicture((delta * 255.0).astype(np.uint8))
 
 
 def normalize_by_gray_scale(

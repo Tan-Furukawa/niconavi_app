@@ -201,5 +201,13 @@ def at_grain_tab(stores: Stores) -> Figure:
                 stores.ui.map_tab.angle_map_display.get(),
                 mask=grain_mask,
             )
+        case 22:
+            return plot_RGBpicture(stores, raw_map.get("add_image"), mask=grain_mask)
+        case 23:
+            color_change = tilt0.get("color_change") if tilt0 is not None else None
+            return plot_RGBpicture(stores, color_change, mask=grain_mask)
+        case 24:
+            color_change = tilt45.get("color_change") if tilt45 is not None else None
+            return plot_RGBpicture(stores, color_change, mask=grain_mask)
         case _:
             return get_no_image()
