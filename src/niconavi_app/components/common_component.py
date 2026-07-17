@@ -73,6 +73,17 @@ def discarded_tabs(stores: Stores, stage: int) -> tuple[str, ...]:
     return TAB_ORDER[stage + 1 : progress + 1]
 
 
+def describe_downstream_reset(stores: Stores, stage: int) -> str:
+    """Sentence naming the tabs an action on `stage` resets, "" if there are none."""
+    names = discarded_tabs(stores, stage)
+    if not names:
+        return ""
+    if len(names) == 1:
+        return f"The {names[0]} tab goes back to its initial state."
+    listed = f"{', '.join(names[:-1])} and {names[-1]}"
+    return f"The {listed} tabs go back to their initial state."
+
+
 def confirm_discard_downstream(
     page: Optional[ft.Page],
     stores: Stores,
@@ -84,18 +95,14 @@ def confirm_discard_downstream(
 
     Running a step re-runs everything downstream of it, so the later tabs fall
     back to their initial state. Only ask when there is something to lose: with
-    no downstream tab open the action runs straight away.
+    no downstream tab open the action runs straight away. A step that also
+    destroys work on its own tab has more than this to warn about and should
+    build its message on `describe_downstream_reset` instead.
     """
-    names = discarded_tabs(stores, stage)
-    if not names or page is None:
+    message = describe_downstream_reset(stores, stage)
+    if not message or page is None:
         on_confirm()
         return
-
-    if len(names) == 1:
-        message = f"This resets the {names[0]} tab to its initial state."
-    else:
-        listed = f"{', '.join(names[:-1])} and {names[-1]}"
-        message = f"This resets the {listed} tabs to their initial state."
 
     confirm_action(page, f"{action}?", message, on_confirm)
 
