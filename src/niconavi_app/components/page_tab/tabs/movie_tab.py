@@ -115,7 +115,7 @@ def reset_button_click(stores: Stores, *, logger: Logger) -> None:
     controller.reset_application()
 
     r = as_ComputationResult(stores.computation_result)
-    r = reset_onclick_load_data(r)
+    r = reset_onclick_load_data(r, stores)
     save_in_ComputationResultState(r, stores)
     stores.ui.once_start.set(False)
     stores.ui.progress.set(0)
@@ -132,7 +132,7 @@ def recalculate_maps_click(stores: Stores, *, logger: Logger) -> None:
 
         r = as_ComputationResult(stores.computation_result)
 
-        r = reset_onclick_recalculate_button(r)
+        r = reset_onclick_recalculate_button(r, stores)
 
         save_in_ComputationResultState(r, stores)
 

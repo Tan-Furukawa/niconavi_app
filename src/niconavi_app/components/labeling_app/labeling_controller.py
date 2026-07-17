@@ -403,7 +403,7 @@ class LabelingController:
         # reset existing results
         update_progress_bar(None, self.stores)
         r = as_ComputationResult(self.stores.computation_result)
-        r = reset_onclick_classify_button(r)
+        r = reset_onclick_classify_button(r, self.stores)
         save_in_ComputationResultState(r, self.stores)
         update_progress_bar(0, self.stores)
 

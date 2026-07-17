@@ -249,10 +249,11 @@ class AnalysisTab:
         # which grains were used, the M/b/alpha fit, and (when normalize is on)
         # the predicted thickness. Non-interactive - not tied to grain toggles.
         self.cip_stats_text: State[str] = State(CIP_STATS_DEFAULT)
-        # Before/after grain-center RGB regression figure, set on calculate.
-        # When present (and plot option is CPO), the image list shows an
-        # "RGB comparison" button that displays it in the image view.
-        self.cip_regression_figure: State[Optional[Figure]] = State(None)
+        # Grain-center RGB regression figures, set on calculate: one per image
+        # button, before and after the color correction. When present (and the
+        # plot option is CPO), each gets a button under "color check".
+        self.cip_regression_before_figure: State[Optional[Figure]] = State(None)
+        self.cip_regression_after_figure: State[Optional[Figure]] = State(None)
         self.histogram_stats_text: State[str] = State(HISTOGRAM_STATS_DEFAULT)
         self.rose_stats_text: State[str] = State(ROSE_STATS_DEFAULT)
 
@@ -278,7 +279,7 @@ class MapTab:
         self.segmentation_done: State[bool] = State(False)
         self.fill_boundary_started: State[bool] = State(False)
         self.boundary_registered: State[bool] = State(False)
-        # image-list buttons the user is prompted to check (shown red until
+        # images-panel buttons the user is prompted to check (shown red until
         # clicked once). Holds the grain-tab button indices already
         # acknowledged; cleared on recalculate / reset all so the prompt
         # returns. See make_check_prompt_button.

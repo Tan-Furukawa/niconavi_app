@@ -122,7 +122,7 @@ def main(page: ft.Page) -> None:
     )
 
     image_selector_header = ft.Container(
-        content=CustomText("image list"),
+        content=CustomText("images"),
         height=25,
         width=200,
         margin=0,

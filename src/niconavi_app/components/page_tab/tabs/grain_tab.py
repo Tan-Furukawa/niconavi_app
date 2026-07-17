@@ -213,7 +213,7 @@ def continue_button_click(
 
         update_progress_bar(None, stores)
         r = as_ComputationResult(stores.computation_result)
-        r = reset_onclick_grain_analyze_button(r)
+        r = reset_onclick_grain_analyze_button(r, stores)
         save_in_ComputationResultState(r, stores)
 
         update_progress_bar(0.0, stores)
@@ -241,9 +241,9 @@ def execute_grain_boundary_calc_button_click(
 
         update_progress_bar(None, stores)
         r = as_ComputationResult(stores.computation_result)
-        r = reset_onclick_grain_boundary_button(r)
+        r = reset_onclick_grain_boundary_button(r, stores)
         r = po.make_grain_boundary(r)
-        # r = reset_onclick_grain_analyze_button(r)
+        # r = reset_onclick_grain_analyze_button(r, stores)
         save_in_ComputationResultState(r, stores)
         update_progress_bar(0.0, stores)
         update_logs(stores, ("Grain segmentation completed.", "ok"))
@@ -388,7 +388,7 @@ def reset_angle_map_button_click(
         # invalidates the grain analysis and everything the later tabs built on
         # top: clear them too rather than leave them showing stale results.
         r = as_ComputationResult(stores.computation_result)
-        r = reset_onclick_grain_boundary_button(r)
+        r = reset_onclick_grain_boundary_button(r, stores)
         save_in_ComputationResultState(r, stores)
 
         reset_filter_tab(stores)

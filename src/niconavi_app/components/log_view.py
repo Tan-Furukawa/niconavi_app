@@ -8,71 +8,40 @@ from niconavi_app.components.common_component import (
 )
 
 
+# Icon and text colour per log level. "msg" marks work in progress ("Uploading
+# xxx ...") and carries an icon like the rest, so a running step reads as a step
+# rather than as a stray line of text. Its text stays white: only the levels
+# that need attention colour the message itself.
+LOG_LEVEL_STYLE: dict[str, tuple[str, str, Optional[str]]] = {
+    "ok": (ft.Icons.CHECK_CIRCLE, ft.Colors.GREEN, None),
+    "err": (ft.Icons.CANCEL, ft.Colors.RED, ft.Colors.RED),
+    "warn": (ft.Icons.WARNING, ft.Colors.AMBER, ft.Colors.AMBER),
+    "msg": (ft.Icons.PENDING, ft.Colors.BLUE_200, None),
+}
+
+
 def create_column(stores: Stores) -> ft.Column:
-
-    # 状態毎のアイコンマップ（適宜変更可能）
     data = stores.ui.log_view.log_contents.get()
-
-    icon_map = {
-        "ok": ft.Icons.CHECK_CIRCLE,
-        "err": ft.Icons.CANCEL,
-        "msg": ft.Icons.MESSAGE,
-        "warn": ft.Icons.WARNING,
-    }
 
     controls = []
     for text_val, status in data:
-        # "msg"の場合はアイコンなしでテキストのみ表示しても良い
-        if status == "ok":
-            controls.append(
-                ft.Row(
-                    [
-                        ft.Icon(icon_map["ok"], color=ft.Colors.GREEN, size=20),
-                        ft.Container(
-                            CustomText(text_val),
-                            width=stores.appearance.tabs_width
-                            - 45,  # icon + paddingの分を引く
-                        ),
-                    ]
-                )
+        icon, icon_color, text_color = LOG_LEVEL_STYLE.get(
+            status, LOG_LEVEL_STYLE["msg"]
+        )
+        controls.append(
+            ft.Row(
+                controls=[
+                    ft.Icon(icon, color=icon_color, size=20),
+                    ft.Container(
+                        CustomText(text_val, color=text_color)
+                        if text_color is not None
+                        else CustomText(text_val),
+                        # icon + paddingの分を引く
+                        width=stores.appearance.tabs_width - 45,
+                    ),
+                ]
             )
-
-        elif status == "err":
-            controls.append(
-                ft.Row(
-                    controls=[
-                        ft.Icon(icon_map["err"], color=ft.Colors.RED, size=20),
-                        ft.Container(
-                            CustomText(text_val, color=ft.Colors.RED),
-                            width=stores.appearance.tabs_width - 45,
-                        ),
-                    ]
-                )
-            )
-
-        elif status == "warn":
-            controls.append(
-                ft.Row(
-                    controls=[
-                        ft.Icon(icon_map["warn"], color=ft.Colors.AMBER, size=20),
-                        ft.Container(
-                            CustomText(text_val, color=ft.Colors.AMBER),
-                            width=stores.appearance.tabs_width - 45,
-                        ),
-                    ]
-                )
-            )
-
-        else:  # "msg"
-            controls.append(
-                ft.Row(
-                    controls=[
-                        ft.Container(
-                            CustomText(text_val), width=stores.appearance.tabs_width - 45
-                        ),
-                    ],
-                )
-            )
+        )
 
     return ft.Column(controls=controls, scroll=ft.ScrollMode.ALWAYS, spacing=10)
 
