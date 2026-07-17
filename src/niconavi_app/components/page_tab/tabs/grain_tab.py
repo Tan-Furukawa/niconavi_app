@@ -381,6 +381,19 @@ def reset_angle_map_button_click(
     try:
         update_progress_bar(None, stores)
         reset_angle_map_workflow(stores)
+
+        # The angle map is what the grain boundary is cut from, so dropping it
+        # invalidates the grain analysis and everything the later tabs built on
+        # top: clear them too rather than leave them showing stale results.
+        r = as_ComputationResult(stores.computation_result)
+        r = reset_onclick_grain_boundary_button(r)
+        save_in_ComputationResultState(r, stores)
+
+        reset_filter_tab(stores)
+        LabelingController(stores=stores).reset_application()
+        stores.ui.progress.set(MAP_TAB_STAGE)
+
+        update_logs(stores, ("Angle map reset.", "ok"))
         update_progress_bar(0.0, stores)
     except Exception:
         update_logs(stores, ("Failed to reset angle map.", "err"))
@@ -670,8 +683,14 @@ class GrainTab(ft.Container):
                         ),
                         make_map_action_button(
                             "Reset",
-                            on_click=lambda e: reset_angle_map_button_click(
-                                stores, e, logger=logger
+                            on_click=lambda e: confirm_discard_downstream(
+                                page,
+                                stores,
+                                MAP_TAB_STAGE,
+                                "Reset the angle map",
+                                lambda: reset_angle_map_button_click(
+                                    stores, e, logger=logger
+                                ),
                             ),
                             enabled=reset_enabled,
                         ),
