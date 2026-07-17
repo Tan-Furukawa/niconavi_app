@@ -6,6 +6,7 @@ from niconavi_app.reactive_state import (
     ReactiveCheckbox,
     ReactiveText,
     ReactiveRow,
+    ReactiveColumn,
 )
 from niconavi_app.state import StateProperty, ReactiveState, State, get_prop_value
 import threading
@@ -53,6 +54,52 @@ def confirm_action(
     page.open(dialog)
 
 
+# Workflow tab order. The index of a tab is also the `stores.ui.progress`
+# value that makes it visible, so a tab is downstream of `stage` when its
+# index is in `stage + 1 .. progress`.
+TAB_ORDER = ("video", "center", "map", "filter", "analysis")
+(
+    VIDEO_TAB_STAGE,
+    CENTER_TAB_STAGE,
+    MAP_TAB_STAGE,
+    FILTER_TAB_STAGE,
+    ANALYSIS_TAB_STAGE,
+) = range(len(TAB_ORDER))
+
+
+def discarded_tabs(stores: Stores, stage: int) -> tuple[str, ...]:
+    """The tabs an action on `stage` would reset, in workflow order."""
+    progress = min(stores.ui.progress.get(), len(TAB_ORDER) - 1)
+    return TAB_ORDER[stage + 1 : progress + 1]
+
+
+def confirm_discard_downstream(
+    page: Optional[ft.Page],
+    stores: Stores,
+    stage: int,
+    action: str,
+    on_confirm: Callable[[], None],
+) -> None:
+    """Warn before an action on `stage` resets the tabs built after it.
+
+    Running a step re-runs everything downstream of it, so the later tabs fall
+    back to their initial state. Only ask when there is something to lose: with
+    no downstream tab open the action runs straight away.
+    """
+    names = discarded_tabs(stores, stage)
+    if not names or page is None:
+        on_confirm()
+        return
+
+    if len(names) == 1:
+        message = f"This resets the {names[0]} tab to its initial state."
+    else:
+        listed = f"{', '.join(names[:-1])} and {names[-1]}"
+        message = f"This resets the {listed} tabs to their initial state."
+
+    confirm_action(page, f"{action}?", message, on_confirm)
+
+
 class CustomReactiveText(ReactiveText):
     def __init__(
         self,
@@ -62,6 +109,53 @@ class CustomReactiveText(ReactiveText):
     ) -> None:
         super().__init__(text=text, visible=visible, **kwargs)
         self.color = ft.Colors.WHITE
+
+
+class InformationPanel(ReactiveColumn):
+    """Bordered "Information" box shared by the analysis plots.
+
+    Stays hidden while `text` is still `placeholder`: a panel with nothing to
+    report is not drawn at all.
+    """
+
+    def __init__(
+        self,
+        text: State[str],
+        placeholder: str,
+        title: str = "Information",
+        **kwargs: Any,
+    ) -> None:
+        header = ft.Container(
+            content=CustomText(title),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            bgcolor=ft.Colors.BLACK26,
+        )
+        body = ft.Container(
+            content=ft.SelectionArea(CustomReactiveText(text)),
+            padding=8,
+        )
+        box = ft.Container(
+            content=ft.Column(
+                [header, body],
+                spacing=0,
+                # Without STRETCH the header only spans its own label, leaving
+                # the coloured bar narrower than the box around it.
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            ),
+            border=ft.border.all(1, ft.Colors.WHITE24),
+            border_radius=6,
+            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            margin=ft.margin.only(top=8),
+        )
+        super().__init__(
+            [box],
+            visible=ReactiveState(
+                lambda: text.get().strip() not in ("", placeholder),
+                [text],
+            ),
+            spacing=0,
+            **kwargs,
+        )
 
 
 class CustomReactiveCheckbox(ReactiveCheckbox):

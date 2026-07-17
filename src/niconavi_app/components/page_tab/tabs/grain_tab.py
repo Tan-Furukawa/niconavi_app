@@ -29,6 +29,8 @@ from niconavi_app.components.common_component import (
     CustomReactiveText,
     CustomRadio,
     CustomReactiveCheckbox,
+    confirm_discard_downstream,
+    MAP_TAB_STAGE,
 )
 from niconavi_app.tools.tools import convert_RGBPicture_to_src_base64, switch_tab_index
 from niconavi_app.components.log_view import update_logs
@@ -680,8 +682,12 @@ class GrainTab(ft.Container):
                     [
                         make_map_action_button(
                             "▶ Continue",
-                            on_click=lambda e: continue_button_click(
-                                stores, e, logger=logger
+                            on_click=lambda e: confirm_discard_downstream(
+                                page,
+                                stores,
+                                MAP_TAB_STAGE,
+                                "Rerun grain analysis",
+                                lambda: continue_button_click(stores, e, logger=logger),
                             ),
                             enabled=continue_enabled,
                         ),

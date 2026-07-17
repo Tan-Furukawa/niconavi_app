@@ -23,6 +23,8 @@ from niconavi_app.components.common_component import (
     CustomText,
     CustomReactiveText,
     confirm_action,
+    confirm_discard_downstream,
+    VIDEO_TAB_STAGE,
 )
 
 from niconavi_app.components.labeling_app.labeling_controller import LabelingController
@@ -510,10 +512,11 @@ class MovieTab(ft.Container):
 
         recalculate_maps = CustomExecuteButton(
             "▶ recalulate",
-            on_click=lambda e: confirm_action(
+            on_click=lambda e: confirm_discard_downstream(
                 page,
-                "Recalculate maps?",
-                "This will clear grain, filter, and analysis results made after map calculation.",
+                stores,
+                VIDEO_TAB_STAGE,
+                "Recalculate maps",
                 lambda: recalculate_maps_click(stores, logger=logger),
             ),
             enabled=ReactiveState(

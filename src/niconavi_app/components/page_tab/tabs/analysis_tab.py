@@ -2,6 +2,9 @@ from niconavi_app.stores import (
     Stores,
     as_ComputationResult,
     save_in_ComputationResultState,
+    CIP_STATS_DEFAULT,
+    HISTOGRAM_STATS_DEFAULT,
+    ROSE_STATS_DEFAULT,
 )
 from niconavi_app.reactive_state import (
     ReactiveRow,
@@ -16,6 +19,7 @@ from niconavi_app.components.common_component import (
     CustomRadio,
     CustomReactiveText,
     CustomExecuteButton,
+    InformationPanel,
     make_ADD_counter_button,
     make_REMOVE_counter_button,
     make_reactive_float_text_filed,
@@ -908,11 +912,9 @@ class AnalysisTab(ft.Container):
                                         force_update_image_view(stores),
                                     ),
                                 ),
-                                CustomText("information"),
-                                ft.SelectionArea(
-                                    CustomReactiveText(
-                                        stores.ui.analysis_tab.rose_stats_text
-                                    )
+                                InformationPanel(
+                                    stores.ui.analysis_tab.rose_stats_text,
+                                    ROSE_STATS_DEFAULT,
                                 ),
                                 # ReactiveColumn( [drop_rose_diagram], visible=selection_is_grain
                                 # ),
@@ -954,11 +956,9 @@ class AnalysisTab(ft.Container):
                                         histogram_alpha_slider,
                                     ]
                                 ),
-                                CustomText("information"),
-                                ft.SelectionArea(
-                                    CustomReactiveText(
-                                        stores.ui.analysis_tab.histogram_stats_text
-                                    )
+                                InformationPanel(
+                                    stores.ui.analysis_tab.histogram_stats_text,
+                                    HISTOGRAM_STATS_DEFAULT,
                                 ),
                             ],
                             visible=visible_histogram,
@@ -996,30 +996,9 @@ class AnalysisTab(ft.Container):
                                 cip_thickness,
                                 cip_normalize_90,
                                 cip_start_button,
-                                ft.Container(
-                                    content=ft.Column(
-                                        [
-                                            ft.Container(
-                                                content=CustomText("Information"),
-                                                padding=ft.padding.only(
-                                                    left=8, top=4, bottom=4
-                                                ),
-                                                bgcolor=ft.Colors.BLACK26,
-                                            ),
-                                            ft.Container(
-                                                content=ft.SelectionArea(
-                                                    CustomReactiveText(
-                                                        stores.ui.analysis_tab.cip_stats_text
-                                                    )
-                                                ),
-                                                padding=8,
-                                            ),
-                                        ],
-                                        spacing=0,
-                                    ),
-                                    border=ft.border.all(1, ft.Colors.WHITE24),
-                                    border_radius=6,
-                                    margin=ft.margin.only(top=8),
+                                InformationPanel(
+                                    stores.ui.analysis_tab.cip_stats_text,
+                                    CIP_STATS_DEFAULT,
                                 ),
                             ],
                             visible=visible_CIP,

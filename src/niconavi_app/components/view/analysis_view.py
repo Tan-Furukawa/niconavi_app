@@ -1,6 +1,11 @@
 from typing import Optional
 
-from niconavi_app.stores import Stores, as_ComputationResult
+from niconavi_app.stores import (
+    Stores,
+    as_ComputationResult,
+    HISTOGRAM_STATS_DEFAULT,
+    ROSE_STATS_DEFAULT,
+)
 from matplotlib.pyplot import Figure, Axes
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
@@ -35,10 +40,6 @@ from niconavi_app.components.view.spatial_units import (
 )
 from niconavi_app.components.view.plot import plot_polar_map, plot_float_map, plot_polar_distribution
 from niconavi_app.niconavi.statistics.array_to_float import circular_variance
-
-
-HISTOGRAM_STATS_DEFAULT = "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
-ROSE_STATS_DEFAULT = "Mean orientation: -\nCircular variance: -"
 
 
 def _grain_is_inside_circle_for_display(grain: dict, outside_circle_mask: np.ndarray) -> bool:
