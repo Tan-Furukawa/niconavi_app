@@ -55,29 +55,38 @@ from niconavi_app.niconavi.cpo_pipeline import (
     estimate_cpo_orientation,
     write_cpo_orientation_into_raw_maps,
     format_cpo_orientation_info,
+    make_cpo_regression_figure,
+    CPOOrientationResult,
 )
 
 
 def onclick_cip_start_button(
-    stores: Stores, e: ft.FilePickerResultEvent, *, logger: Logger
+    stores: Stores, e: ft.FilePickerResultEvent, page: Optional[Page], *, logger: Logger
 ) -> None:
     # CPO input is thickness only now (Max R retired, see move_v3.md).
     if stores.computation_result.optical_parameters.thickness.get() is None:
         update_logs(stores, ("Please provide the thickness value.", "err"))
         return None
 
+    def log(message: str, level: str = "msg") -> None:
+        update_logs(stores, (message, level), logger=logger)
+
     try:
         update_progress_bar(None, stores)
+        log("Starting CPO computation...")
+        # Drop any previous RGB comparison figure (image-list button hides).
+        stores.ui.analysis_tab.cip_regression_figure.set(None)
         r = as_ComputationResult(stores.computation_result)
         # Force the thickness-based inclination path (the Max R radio is gone).
         r.tilt_image_info.estimate_inclination_by = "thickness"
         r = reset_onclick_cip_computation_button(r)
         save_in_ComputationResultState(r, stores)
 
+        update_progress_bar(0.1, stores)
+        log("Estimating base inclination from the retardation map...")
         r = po.get_inclination(
             r, progress_callback=lambda p: update_progress_bar(p, stores)
         )
-        update_progress_bar(None, stores)
 
         # Replace the retardation-based inclination with the addition-image
         # theta + color-correction fit + E-down-tilt branch resolution - the
@@ -85,14 +94,36 @@ def onclick_cip_start_button(
         # overrides raw_maps inclination / inclination_0_to_180 / azimuth360
         # so every CPO plot (grain & pixel, 90/180/360, map-COI) matches.
         normalize_90 = stores.ui.analysis_tab.cip_normalize_90.get()
-        info_text = _run_cpo_orientation_pipeline(r, normalize_90=normalize_90)
+        info_text, orientation = _run_cpo_orientation_pipeline(
+            r,
+            normalize_90=normalize_90,
+            progress_callback=lambda p: update_progress_bar(p, stores),
+            log=log,
+        )
 
+        update_progress_bar(0.8, stores)
+        log("Analyzing grains for CPO...")
         r = po.analyze_grain_list_for_CIP(r)
+
+        update_progress_bar(0.9, stores)
+        log("Building the CPO stereo / COI maps...")
         r = po.make_CIP_map_info(r)
-        update_progress_bar(0, stores)
         save_in_ComputationResultState(r, stores)
         stores.ui.analysis_tab.cip_stats_text.set(info_text)
-        update_logs(stores, ("Inclination estimation completed.", "ok"))
+
+        # Build the before/after RGB regression figure and expose it as the
+        # image-list "RGB comparison" button (shown while CPO is selected).
+        figure = (
+            make_cpo_regression_figure(orientation)
+            if orientation is not None
+            else None
+        )
+        stores.ui.analysis_tab.cip_regression_figure.set(figure)
+        if figure is not None:
+            log("RGB comparison ready (see the image list).")
+
+        update_progress_bar(0, stores)
+        log("CPO computation completed.", "ok")
 
     except Exception as e:
         update_logs(stores, (str(e), "err"))
@@ -101,20 +132,33 @@ def onclick_cip_start_button(
         logger.error(traceback.format_exc())
 
 
-def _run_cpo_orientation_pipeline(r, *, normalize_90: bool) -> str:
+def _run_cpo_orientation_pipeline(
+    r,
+    *,
+    normalize_90: bool,
+    progress_callback: Callable[[float | None], None] = lambda p: None,
+    log: Callable[..., None] = lambda *a, **k: None,
+) -> tuple[str, Optional[CPOOrientationResult]]:
     """Run the run_diagnostics.py CPO orientation pipeline on r (mutating
-    r.raw_maps inclination maps in place) and return the Info-panel text.
-    Requires raw_maps (p45/m45), a grain map and the 0 deg tilt result; falls
-    back to a message when they are missing."""
+    r.raw_maps inclination maps in place). Returns (info text, orientation);
+    orientation is None when the required inputs are missing."""
     if (
         r.raw_maps is None
         or r.grain_map is None
         or r.tilt_image_info.tilt_image0 is None
     ):
-        return "CPO computed, but the addition-image orientation needs the\n" \
-            "retardation-plate maps and the 0° tilt image."
+        return (
+            "CPO computed, but the addition-image orientation needs the\n"
+            "retardation-plate maps and the 0° tilt image.",
+            None,
+        )
 
-    orientation = estimate_cpo_orientation(r, normalize_90=normalize_90)
+    orientation = estimate_cpo_orientation(
+        r,
+        normalize_90=normalize_90,
+        progress_callback=progress_callback,
+        log_callback=lambda m: log(m),
+    )
     write_cpo_orientation_into_raw_maps(r.raw_maps, orientation)
 
     displayed_minerals = None
@@ -124,11 +168,12 @@ def _run_cpo_orientation_pipeline(r, *, normalize_90: bool) -> str:
             for mineral, selection in r.grain_classification_result.items()
             if mineral != "mask" and selection.get("display")
         )
-    return format_cpo_orientation_info(
+    info_text = format_cpo_orientation_info(
         orientation=orientation,
         normalize_90=normalize_90,
         displayed_minerals=displayed_minerals,
     )
+    return info_text, orientation
 
 
 def on_change_checkbox(
@@ -531,10 +576,12 @@ def make_cip_noise_size_pint(stores: Stores) -> ft.Row:
     )
 
 
-def make_cip_start_button(stores: Stores, *, logger: Logger) -> CustomExecuteButton:
+def make_cip_start_button(
+    stores: Stores, page: Optional[Page], *, logger: Logger
+) -> CustomExecuteButton:
     return CustomExecuteButton(
         "calculate",
-        on_click=lambda e: onclick_cip_start_button(stores, e, logger=logger),
+        on_click=lambda e: onclick_cip_start_button(stores, e, page, logger=logger),
         enabled=ReactiveState(
             lambda: stores.ui.computing_is_stop.get(),
             [stores.ui.computing_is_stop],
@@ -770,7 +817,7 @@ class AnalysisTab(ft.Container):
         pixel_or_grain_radio = make_pixel_or_grain_radio_button(stores)
         cip_thickness = make_cip_thickness_input(stores)
         cip_normalize_90 = make_cip_normalize_90_checkbox(stores)
-        cip_start_button = make_cip_start_button(stores, logger=logger)
+        cip_start_button = make_cip_start_button(stores, page, logger=logger)
         cip_bandwidth = make_cip_bandwidth_input(stores)
         cip_theme = make_cip_theme_input(stores)
         cip_display_points = make_cip_display_points_input(stores)
@@ -949,11 +996,30 @@ class AnalysisTab(ft.Container):
                                 cip_thickness,
                                 cip_normalize_90,
                                 cip_start_button,
-                                CustomText("information"),
-                                ft.SelectionArea(
-                                    CustomReactiveText(
-                                        stores.ui.analysis_tab.cip_stats_text
-                                    )
+                                ft.Container(
+                                    content=ft.Column(
+                                        [
+                                            ft.Container(
+                                                content=CustomText("Information"),
+                                                padding=ft.padding.only(
+                                                    left=8, top=4, bottom=4
+                                                ),
+                                                bgcolor=ft.Colors.BLACK26,
+                                            ),
+                                            ft.Container(
+                                                content=ft.SelectionArea(
+                                                    CustomReactiveText(
+                                                        stores.ui.analysis_tab.cip_stats_text
+                                                    )
+                                                ),
+                                                padding=8,
+                                            ),
+                                        ],
+                                        spacing=0,
+                                    ),
+                                    border=ft.border.all(1, ft.Colors.WHITE24),
+                                    border_radius=6,
+                                    margin=ft.margin.only(top=8),
                                 ),
                             ],
                             visible=visible_CIP,
