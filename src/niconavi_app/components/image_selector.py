@@ -104,7 +104,8 @@ class ImageSelector(ft.Container):
             cip_polar90,
             cip_polar180,
             cip_polar360,
-            cip_rgb_comparison,
+            cip_rgb_before,
+            cip_rgb_after,
         ) = make_cip_button_visible_state(stores, 4)
 
         spo_spo, spo_ellipse, spo_major_axis = (
@@ -263,13 +264,15 @@ class ImageSelector(ft.Container):
                     "color check",
                     4,
                     lambda: stores.ui.analysis_tab.plot_option.get() == "CPO"
-                    and stores.ui.analysis_tab.cip_regression_figure.get() is not None,
+                    and stores.ui.analysis_tab.cip_regression_before_figure.get()
+                    is not None,
                     [
                         stores.ui.analysis_tab.plot_option,
-                        stores.ui.analysis_tab.cip_regression_figure,
+                        stores.ui.analysis_tab.cip_regression_before_figure,
                     ],
                 ),
-                cip_rgb_comparison,
+                cip_rgb_before,
+                cip_rgb_after,
             ],
             scroll=ft.ScrollMode.ADAPTIVE,
         )

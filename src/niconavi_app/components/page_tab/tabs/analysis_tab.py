@@ -78,12 +78,10 @@ def onclick_cip_start_button(
     try:
         update_progress_bar(None, stores)
         log("Starting CPO computation...")
-        # Drop any previous RGB comparison figure (image-list button hides).
-        stores.ui.analysis_tab.cip_regression_figure.set(None)
         r = as_ComputationResult(stores.computation_result)
         # Force the thickness-based inclination path (the Max R radio is gone).
         r.tilt_image_info.estimate_inclination_by = "thickness"
-        r = reset_onclick_cip_computation_button(r)
+        r = reset_onclick_cip_computation_button(r, stores)
         save_in_ComputationResultState(r, stores)
 
         update_progress_bar(0.1, stores)
@@ -115,16 +113,16 @@ def onclick_cip_start_button(
         save_in_ComputationResultState(r, stores)
         stores.ui.analysis_tab.cip_stats_text.set(info_text)
 
-        # Build the before/after RGB regression figure and expose it as the
-        # image-list "RGB comparison" button (shown while CPO is selected).
-        figure = (
-            make_cpo_regression_figure(orientation)
-            if orientation is not None
-            else None
-        )
-        stores.ui.analysis_tab.cip_regression_figure.set(figure)
-        if figure is not None:
-            log("RGB comparison ready (see the image list).")
+        # Build the RGB regression figures and expose them as the "color check"
+        # buttons, one image each (shown while CPO is selected).
+        before_figure = after_figure = None
+        if orientation is not None:
+            before_figure = make_cpo_regression_figure(orientation, corrected=False)
+            after_figure = make_cpo_regression_figure(orientation, corrected=True)
+        stores.ui.analysis_tab.cip_regression_before_figure.set(before_figure)
+        stores.ui.analysis_tab.cip_regression_after_figure.set(after_figure)
+        if before_figure is not None:
+            log("RGB color check ready (see the images panel).")
 
         update_progress_bar(0, stores)
         log("CPO computation completed.", "ok")

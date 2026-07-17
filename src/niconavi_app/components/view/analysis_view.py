@@ -530,15 +530,15 @@ def at_analysis_tab(stores: Stores) -> Figure:
         return get_no_image()
 
     elif stores.ui.analysis_tab.plot_option.get() == "CPO":
-        # The before/after RGB regression figure (image-list "RGB comparison"
-        # button, index 17) is a stored figure independent of the maps.
+        # The RGB regression figures ("color check" buttons, indices 17 and 18)
+        # are stored figures independent of the maps.
         if stores.ui.selected_button_at_analysis_tab.get() == 17:
-            regression_figure = stores.ui.analysis_tab.cip_regression_figure.get()
-            return (
-                regression_figure
-                if regression_figure is not None
-                else get_no_image()
-            )
+            before_figure = stores.ui.analysis_tab.cip_regression_before_figure.get()
+            return before_figure if before_figure is not None else get_no_image()
+
+        if stores.ui.selected_button_at_analysis_tab.get() == 18:
+            after_figure = stores.ui.analysis_tab.cip_regression_after_figure.get()
+            return after_figure if after_figure is not None else get_no_image()
 
         raw_map = stores.computation_result.raw_maps.get()
         grain_map = stores.computation_result.grain_map.get()

@@ -149,6 +149,29 @@ def estimate_cpo_orientation(
     )
 
 
+# The image view is near-black, so the regression figures stay transparent and
+# draw in light ink. The channel colours are lifted from the matplotlib tab:
+# defaults, which go muddy on black.
+_FOREGROUND_COLOR = "white"
+_GUIDE_COLOR = "0.65"
+_CHANNEL_COLORS = ("#ff6b6b", "#69db7c", "#4dabf7")
+
+
+def _style_axis_for_dark_background(axis) -> None:
+    """Make one axis legible on the dark image view: transparent fill, light
+    ink for every frame, tick, label and the legend."""
+    axis.set_facecolor("none")
+    for spine in axis.spines.values():
+        spine.set_color(_FOREGROUND_COLOR)
+    axis.tick_params(axis="both", colors=_FOREGROUND_COLOR)
+    axis.xaxis.label.set_color(_FOREGROUND_COLOR)
+    axis.yaxis.label.set_color(_FOREGROUND_COLOR)
+    axis.title.set_color(_FOREGROUND_COLOR)
+    legend = axis.legend(loc="best", fontsize=7, framealpha=0.0)
+    for text in legend.get_texts():
+        text.set_color(_FOREGROUND_COLOR)
+
+
 def _draw_color_regression(
     axis,
     predicted_rgb: np.ndarray,
@@ -159,10 +182,17 @@ def _draw_color_regression(
 ) -> None:
     """Per-channel scatter of predicted vs observed grain-center RGB, with a
     per-channel linear fit and R^2. Ported from
-    diagnostics.show_grain_center_color_regression."""
-    channel_specs = (("R", "tab:red", 0), ("G", "tab:green", 1), ("B", "tab:blue", 2))
+    diagnostics.show_grain_center_color_regression.
+
+    Drawn for the app's dark image view: the figure keeps a transparent
+    background and every mark is picked to read against it."""
+    channel_specs = (
+        ("R", _CHANNEL_COLORS[0], 0),
+        ("G", _CHANNEL_COLORS[1], 1),
+        ("B", _CHANNEL_COLORS[2], 2),
+    )
     axis.plot(
-        [0, 255], [0, 255], color="0.35", linestyle="--", linewidth=1.0, label="y=x"
+        [0, 255], [0, 255], color=_GUIDE_COLOR, linestyle="--", linewidth=1.0, label="y=x"
     )
     for channel_name, color, channel_index in channel_specs:
         predicted = np.asarray(predicted_rgb[:, channel_index], dtype=np.float64)
@@ -190,49 +220,56 @@ def _draw_color_regression(
     axis.set_xlabel(x_axis_label)
     axis.set_ylabel("Original grain-center color")
     axis.set_title(title)
-    axis.legend(loc="best", fontsize=7)
-    axis.grid(True, color="0.9", linewidth=0.8)
+    axis.grid(True, color=_FOREGROUND_COLOR, alpha=0.25, linewidth=0.8)
+    _style_axis_for_dark_background(axis)
 
 
 def make_cpo_regression_figure(
     orientation: CPOOrientationResult,
+    *,
+    corrected: bool,
 ) -> Optional[Figure]:
-    """One figure with the before/after grain-center RGB regression side by
-    side: predicted (uncorrected) vs original, and color-corrected
-    (α·M·predicted + b) vs original. Returns None when there was no color fit
-    (too few grain samples). Built with Figure() (not plt.subplots) so it is
-    not in pyplot's global registry - the image view calls plt.close('all')
-    on every render, which would otherwise blank it."""
+    """The grain-center RGB regression as a single plot, so each images-panel
+    button owns one figure: predicted (uncorrected) vs original, or
+    color-corrected (α·M·predicted + b) vs original when `corrected`. Returns
+    None when there was no color fit (too few grain samples). Built with
+    Figure() (not plt.subplots) so it is not in pyplot's global registry - the
+    image view calls plt.close('all') on every render, which would otherwise
+    blank it."""
     predicted = orientation.grain_center_predicted_rgb
     original = orientation.grain_center_original_rgb
     fit = orientation.fit
     if predicted is None or original is None or fit is None or predicted.shape[0] < 2:
         return None
 
-    figure = Figure(figsize=(12.0, 6.2), constrained_layout=True)
-    before_axis, after_axis = figure.subplots(1, 2)
-    figure.suptitle(
-        "RGB color at grain centers  "
-        f"(n={orientation.n_grain_samples}, "
-        f"min grain area={MIN_GRAIN_CENTER_AREA_PX} px)"
-    )
-    _draw_color_regression(
-        before_axis,
-        predicted,
-        original,
-        title="before correction",
-        x_axis_label="Predicted grain-center color",
-    )
-    _draw_color_regression(
-        after_axis,
-        apply_color_correction(predicted, fit),
-        original,
-        title=(
+    if corrected:
+        x_values = apply_color_correction(predicted, fit)
+        title = (
             f"after correction  (α={fit.alpha:.3f}, "
             f"trace(M)={float(np.trace(fit.matrix)):.2f}, "
             f"t={fit.thickness_mm:g} mm)"
-        ),
-        x_axis_label="Corrected predicted color (α·M·predicted + b)",
+        )
+        x_axis_label = "Corrected predicted color (α·M·predicted + b)"
+    else:
+        x_values = predicted
+        title = "before correction"
+        x_axis_label = "Predicted grain-center color"
+
+    figure = Figure(figsize=(6.4, 6.6), constrained_layout=True)
+    axis = figure.subplots(1, 1)
+    figure.patch.set_facecolor("none")
+    figure.suptitle(
+        "RGB color at grain centers  "
+        f"(n={orientation.n_grain_samples}, "
+        f"min grain area={MIN_GRAIN_CENTER_AREA_PX} px)",
+        color=_FOREGROUND_COLOR,
+    )
+    _draw_color_regression(
+        axis,
+        x_values,
+        original,
+        title=title,
+        x_axis_label=x_axis_label,
     )
     return figure
 

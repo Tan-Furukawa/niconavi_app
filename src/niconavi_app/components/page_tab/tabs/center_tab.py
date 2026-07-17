@@ -79,7 +79,7 @@ def on_click_center_button(stores: Stores, *, logger: Logger) -> None:
     try:
         update_progress_bar(None, stores)
         r = as_ComputationResult(stores.computation_result)
-        r = reset_onclick_center_button(r)
+        r = reset_onclick_center_button(r, stores)
         save_in_ComputationResultState(r, stores)
 
         update_logs(
