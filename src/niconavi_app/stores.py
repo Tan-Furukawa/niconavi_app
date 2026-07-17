@@ -243,6 +243,10 @@ class AnalysisTab:
         self.cip_stats_text: State[str] = State(
             "Press calculate to compute CPO."
         )
+        # Before/after grain-center RGB regression figure, set on calculate.
+        # When present (and plot option is CPO), the image list shows an
+        # "RGB comparison" button that displays it in the image view.
+        self.cip_regression_figure: State[Optional[Figure]] = State(None)
         self.histogram_stats_text: State[str] = State(
             "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
         )

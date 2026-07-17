@@ -109,6 +109,7 @@ class ImageView(ft.Container):
             stores.ui.analysis_tab.histogram_log_x,
             stores.ui.analysis_tab.scatter_log_x,
             stores.ui.analysis_tab.scatter_log_y,
+            stores.ui.analysis_tab.cip_regression_figure,
             stores.ui.grain_tab.slider_contrast,
             stores.ui.grain_tab.slider_brightness,
             stores.ui.grain_tab.slider_median_kernel,
