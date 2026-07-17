@@ -552,23 +552,16 @@ def at_analysis_tab(stores: Stores) -> Figure:
 
         if raw_map is not None:
 
-            if (
-                stores.computation_result.tilt_image_info.tilt_image0.get() is not None
-                and stores.computation_result.tilt_image_info.tilt_image0.get()
-                is not None
-            ):
-                mask0 = stores.computation_result.tilt_image_info.tilt_image0.get()
-                mask45 = stores.computation_result.tilt_image_info.tilt_image45.get()
-
-                if mask0 is not None and mask45 is not None:
-                    mask = ~(mask0["image_mask"] & mask45["image_mask"])
-                elif mask0 is not None and mask45 is None:
-                    mask = ~(mask0["image_mask"])
-                    mask = ~create_outside_circle_mask(raw_map["extinction_angle"])
-                else:
-                    mask = ~create_outside_circle_mask(raw_map["extinction_angle"])
+            tilt0 = stores.computation_result.tilt_image_info.tilt_image0.get()
+            tilt45 = stores.computation_result.tilt_image_info.tilt_image45.get()
+            if tilt0 is not None and tilt45 is not None:
+                # image_mask marks where the tilt image has data, and `mask` is
+                # what gets painted over, so hide where either tilt has none.
+                mask = ~(tilt0["image_mask"] & tilt45["image_mask"])
             else:
-                mask = ~create_outside_circle_mask(raw_map["extinction_angle"])
+                # Without both tilts there is no per-pixel validity to go on;
+                # fall back to hiding what sits outside the stage circle.
+                mask = create_outside_circle_mask(raw_map["extinction_angle"])
 
             if stores.ui.selected_button_at_analysis_tab.get() == 0:
                 return plot_float_map(
