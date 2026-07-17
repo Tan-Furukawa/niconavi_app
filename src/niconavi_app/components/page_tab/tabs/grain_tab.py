@@ -29,7 +29,9 @@ from niconavi_app.components.common_component import (
     CustomReactiveText,
     CustomRadio,
     CustomReactiveCheckbox,
+    confirm_action,
     confirm_discard_downstream,
+    describe_downstream_reset,
     MAP_TAB_STAGE,
 )
 from niconavi_app.tools.tools import convert_RGBPicture_to_src_base64, switch_tab_index
@@ -589,6 +591,22 @@ class GrainTab(ft.Container):
             lambda: can_use_angle_map.get(),
             [can_use_angle_map],
         )
+
+        def handle_reset_angle_map(e: ft.ControlEvent) -> None:
+            # Reset throws away the cleaning and segmentation done on this tab,
+            # so it always asks - unlike the steps that only cost the tabs after
+            # them, there is something to lose even with no later tab open.
+            message = "This clears the cleaned angle map and the grain boundary registered from it."
+            downstream = describe_downstream_reset(stores, MAP_TAB_STAGE)
+            if downstream:
+                message = f"{message} {downstream}"
+            confirm_action(
+                page,
+                "Reset the angle map?",
+                message,
+                lambda: reset_angle_map_button_click(stores, e, logger=logger),
+            )
+
         angle_map_legend_visible = ReactiveState(
             lambda: stores.ui.selected_button_at_grain_tab.get() == 21
             and stores.ui.map_tab.angle_map_display.get() is not None,
@@ -683,15 +701,7 @@ class GrainTab(ft.Container):
                         ),
                         make_map_action_button(
                             "Reset",
-                            on_click=lambda e: confirm_discard_downstream(
-                                page,
-                                stores,
-                                MAP_TAB_STAGE,
-                                "Reset the angle map",
-                                lambda: reset_angle_map_button_click(
-                                    stores, e, logger=logger
-                                ),
-                            ),
+                            on_click=lambda e: handle_reset_angle_map(e),
                             enabled=reset_enabled,
                         ),
                     ]
