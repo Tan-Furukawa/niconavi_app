@@ -197,6 +197,14 @@ class LogView:
         ] = State([])
 
 
+# Placeholder text of the analysis "Information" panels. A panel showing its
+# placeholder has no statistics to report yet, and stays hidden until the plot
+# that owns it writes real values over the placeholder.
+CIP_STATS_DEFAULT = "Press calculate to compute CPO."
+HISTOGRAM_STATS_DEFAULT = "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
+ROSE_STATS_DEFAULT = "Mean orientation: -\nCircular variance: -"
+
+
 class AnalysisTab:
     def __init__(self) -> None:
         self.computation_unit: State[Literal["pixel", "grain"]] = State("grain")
@@ -240,19 +248,13 @@ class AnalysisTab:
         # Info panel text for the CPO plot, set when "calculate" is pressed:
         # which grains were used, the M/b/alpha fit, and (when normalize is on)
         # the predicted thickness. Non-interactive - not tied to grain toggles.
-        self.cip_stats_text: State[str] = State(
-            "Press calculate to compute CPO."
-        )
+        self.cip_stats_text: State[str] = State(CIP_STATS_DEFAULT)
         # Before/after grain-center RGB regression figure, set on calculate.
         # When present (and plot option is CPO), the image list shows an
         # "RGB comparison" button that displays it in the image view.
         self.cip_regression_figure: State[Optional[Figure]] = State(None)
-        self.histogram_stats_text: State[str] = State(
-            "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
-        )
-        self.rose_stats_text: State[str] = State(
-            "Mean orientation: -\nCircular variance: -"
-        )
+        self.histogram_stats_text: State[str] = State(HISTOGRAM_STATS_DEFAULT)
+        self.rose_stats_text: State[str] = State(ROSE_STATS_DEFAULT)
 
 
 class GrainTab:
