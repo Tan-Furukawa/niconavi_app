@@ -317,22 +317,38 @@ def create_shock_filter_iterator(
     amount: float = 0.5,
     min_vividness_delta: float = 5.0,
     hue_delta_thresh_deg: float = 10.0,
-    preserve_black_l_thresh: float = 18.0,
-    black_source_l_thresh: float = 35.0,
+    preserve_black_v_thresh: float = 39.0,
+    black_source_v_thresh: float = 62.0,
     blurry_vividness_thresh: float = 60.0,
 ) -> Iterator[dict[str, Any]]:
+    """Flow a vivid neighbour into a blurred pixel, one iteration per next().
+
+    Every quantity ranked here is the HSV value V, in 0..255:
+
+        vividness  Q = V           blackness  K = 255 - V
+
+    _theta_phi_to_rgb builds this map fully saturated - S = 255 for every
+    pixel - so the score S * V / 255 that this used to compute was already
+    exactly V, and V is theta / 90 * 255, the inclination the map encodes.
+    Darkness used to be read from CIELAB L instead. L of a saturated color
+    depends on its hue, which made a single L threshold fire anywhere
+    between theta = 8 and 47 deg depending on the azimuth: a perceptual
+    property of the color coding decided a question about orientation. The
+    V thresholds below replace the L ones at the value each L threshold is
+    crossed at for the median hue, the choice that leaves the smallest
+    disagreement with the old behaviour (L <= 18 -> V <= 39 for
+    preserve_black, L <= 35 -> V <= 62 for black_source).
+    """
     filtered = _as_uint8_rgb(theta_phi_angle_info["theta_phi_angle_map"]).astype(np.float32)
     neighbor_offsets = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]
 
     while True:
         src_u8 = np.clip(filtered, 0, 255).astype(np.uint8)
         hsv = cv2.cvtColor(src_u8, cv2.COLOR_RGB2HSV).astype(np.float32)
-        lab = cv2.cvtColor(src_u8, cv2.COLOR_RGB2LAB).astype(np.float32)
         hue = hsv[:, :, 0] * 2.0
-        vividness = hsv[:, :, 1] * (hsv[:, :, 2] / 255.0)
-        l_value = lab[:, :, 0]
-        blackness = 255.0 - l_value
-        preserve_black = l_value <= preserve_black_l_thresh
+        vividness = hsv[:, :, 2]
+        blackness = 255.0 - vividness
+        preserve_black = vividness <= preserve_black_v_thresh
         best_score = vividness.copy()
         best_color = filtered.copy()
 
@@ -351,7 +367,7 @@ def create_shock_filter_iterator(
                 & (hue_diff <= hue_delta_thresh_deg)
             )
             can_black = (
-                (l_value[neighbor] <= black_source_l_thresh)
+                (vividness[neighbor] <= black_source_v_thresh)
                 & (vividness[target] <= blurry_vividness_thresh)
                 & (blackness[neighbor] > best_score[target])
             )
@@ -494,10 +510,18 @@ def fill_dark_boundaries(
     theta_phi_angle_info: dict[str, Any],
     *,
     branch_width_thresh: float,
-    dark_l_thresh: float | None = 15.0,
+    dark_v_thresh: float | None = 34.0,
     max_iterations: int = 3,
     fixed_skeleton_once: bool = False,
 ) -> dict[str, Any]:
+    """Remove thin dark branches from the merged superpixel labels.
+
+    A region counts as dark by its median HSV value V, in 0..255, for the
+    reason create_shock_filter_iterator gives: the map is fully saturated, so
+    V is the inclination it encodes, where CIELAB L also carries the hue. The
+    default replaces the old L <= 15 at the V that threshold is crossed at
+    for the median hue. None disables the darkness test entirely.
+    """
     from scipy import ndimage as ndi
     from skimage.morphology import skeletonize
 
@@ -510,12 +534,12 @@ def fill_dark_boundaries(
     )
     height, width = labels.shape
     removed_mask_total = np.zeros(labels.shape, dtype=bool)
-    lab_l = cv2.cvtColor(base_rgb, cv2.COLOR_RGB2LAB)[:, :, 0]
+    value_channel = cv2.cvtColor(base_rgb, cv2.COLOR_RGB2HSV)[:, :, 2]
 
-    def label_median_l(component_labels: np.ndarray) -> dict[int, float]:
+    def label_median_value(component_labels: np.ndarray) -> dict[int, float]:
         values = {}
         for label in np.unique(component_labels[component_labels >= 0]):
-            values[int(label)] = float(np.median(lab_l[component_labels == label]))
+            values[int(label)] = float(np.median(value_channel[component_labels == label]))
         return values
 
     def thin_branch_mask(region_mask: np.ndarray) -> np.ndarray:
@@ -560,12 +584,12 @@ def fill_dark_boundaries(
 
     def candidate_labels(component_labels: np.ndarray) -> list[int]:
         unique_labels = np.unique(component_labels[component_labels >= 0])
-        if dark_l_thresh is None:
+        if dark_v_thresh is None:
             return [int(label) for label in unique_labels]
         return [
             label
-            for label, l_value in label_median_l(component_labels).items()
-            if l_value <= float(dark_l_thresh)
+            for label, median_value in label_median_value(component_labels).items()
+            if median_value <= float(dark_v_thresh)
         ]
 
     def removable_mask(component_labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -595,7 +619,7 @@ def fill_dark_boundaries(
         if not np.any(remove_mask):
             break
 
-        if dark_l_thresh is None:
+        if dark_v_thresh is None:
             next_labels = labels.copy()
             changed_any_label = False
             for label in np.unique(labels[remove_mask]):
