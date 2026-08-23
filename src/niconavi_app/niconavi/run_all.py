@@ -686,9 +686,20 @@ def make_raw_R_maps(
                             - params.color_chart.xpl_max_retardation,
                             0,
                         ),
-                        # The Theta LUT branch decision needs the same
-                        # thickness and indices the inclination fit uses.
-                        thickness_mm=params.optical_parameters.thickness,
+                        # The Theta LUT is built from the thickness implied
+                        # by xpl_max_retardation, not optical_parameters
+                        # .thickness: the thickness field is entered on the
+                        # analysis tab, which the user only reaches after this
+                        # runs, so at this point it still holds its default.
+                        # xpl_max_retardation is a video-tab input, and it is
+                        # what min_R/max_R above already used to bound the
+                        # chart - so the LUT spans exactly the band the chart
+                        # was allowed to answer from.
+                        thickness_mm=get_thickness_from_max_retardation(
+                            max_retardation=params.color_chart.xpl_max_retardation,
+                            no=params.optical_parameters.no,
+                            ne=params.optical_parameters.ne,
+                        ),
                         no=params.optical_parameters.no,
                         ne=params.optical_parameters.ne,
                     ),
