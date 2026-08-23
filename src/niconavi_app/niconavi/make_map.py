@@ -15,7 +15,12 @@ from typing import (
     TypeVar,
     Callable,
 )
-from niconavi_app.app_config import R_COLOR_MAP_SOURCE, RColorMapSource
+from niconavi_app.app_config import (
+    ADDITION_BRANCH_SOURCE,
+    R_COLOR_MAP_SOURCE,
+    RColorMapSource,
+)
+from niconavi_app.niconavi.addition_branch import solve_branch_maps
 from niconavi_app.niconavi.image.image import resize_img, create_outside_circle_mask
 from niconavi_app.niconavi.image.tools import apply_color_map, apply_2dcolor_map
 import numpy as np
@@ -582,7 +587,20 @@ def make_R_maps(
     full_wave_plate: float = 530,
     max_R: Optional[float] = None,
     min_R: Optional[float] = None,
+    thickness_mm: Optional[float] = None,
+    no: float = 1.544,
+    ne: float = 1.553,
 ) -> RawMaps:
+    """The +/-45 deg retardation maps, the azimuth they fix and the addition
+    image that follows from them.
+
+    With a thickness (and ADDITION_BRANCH_SOURCE left at "theta_lut") the two
+    lambda-plate frames are matched against the Theta LUT the addition-image
+    inclination fit uses - see addition_branch - so the branch decision and the
+    inclination share one color model, one alpha convention and one candidate
+    set. Without a thickness there is no Theta -> retardation relation to build
+    that LUT from, so the pol_lambda retardation chart is read instead.
+    """
 
     R_color_map = raw_maps["R_color_map"]
     extinction_angle = raw_maps["extinction_angle"]
@@ -605,23 +623,40 @@ def make_R_maps(
             "add_image": None,
         }
     else:
-        p45_R_map, _, _ = make_retardation_color_map(
-            p45_R_color_map,
-            pol_lambda_color_chart,
-            pol_lambda_R_array,
-            progress_callback,
-            maxR=max_R,  # 検板が挿入済みのとき
-            minR=min_R,  # 検板が挿入済みのとき
-        )
+        if ADDITION_BRANCH_SOURCE not in ("retardation_chart", "theta_lut"):
+            raise ValueError(
+                f"Unknown ADDITION_BRANCH_SOURCE: {ADDITION_BRANCH_SOURCE}"
+            )
+        if ADDITION_BRANCH_SOURCE == "theta_lut" and thickness_mm is not None:
+            branch = solve_branch_maps(
+                p45_R_color_map,
+                m45_R_color_map,
+                thickness_mm=float(thickness_mm),
+                no=no,
+                ne=ne,
+                lambda_plate_retardation_nm=full_wave_plate,
+                mask=~create_outside_circle_mask(np.asarray(p45_R_color_map)),
+            )
+            p45_R_map = branch.p45_retardation_nm
+            m45_R_map = branch.m45_retardation_nm
+        else:
+            p45_R_map, _, _ = make_retardation_color_map(
+                p45_R_color_map,
+                pol_lambda_color_chart,
+                pol_lambda_R_array,
+                progress_callback,
+                maxR=max_R,  # 検板が挿入済みのとき
+                minR=min_R,  # 検板が挿入済みのとき
+            )
 
-        m45_R_map, _, _ = make_retardation_color_map(
-            m45_R_color_map,
-            pol_lambda_color_chart,
-            pol_lambda_R_array,
-            progress_callback,
-            maxR=max_R,
-            minR=min_R,
-        )
+            m45_R_map, _, _ = make_retardation_color_map(
+                m45_R_color_map,
+                pol_lambda_color_chart,
+                pol_lambda_R_array,
+                progress_callback,
+                maxR=max_R,
+                minR=min_R,
+            )
 
         # R_map_plus = R_map + full_wave_plate
         # R_map_minus = np.abs(full_wave_plate - R_map)

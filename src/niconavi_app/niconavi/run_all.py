@@ -686,6 +686,11 @@ def make_raw_R_maps(
                             - params.color_chart.xpl_max_retardation,
                             0,
                         ),
+                        # The Theta LUT branch decision needs the same
+                        # thickness and indices the inclination fit uses.
+                        thickness_mm=params.optical_parameters.thickness,
+                        no=params.optical_parameters.no,
+                        ne=params.optical_parameters.ne,
                     ),
                 }
             )
