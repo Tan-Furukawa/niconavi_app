@@ -38,7 +38,6 @@ import traceback
 GrainStatisticMethod = Literal["median", "mean"]
 
 GRAIN_PIXEL_STAT_SOURCE_MAP: dict[str, str] = {
-    "R": "max_retardation_map",
     "extinction_angle": "extinction_angle",
     "azimuth": "azimuth",
     "inclination": "inclination",
@@ -1083,10 +1082,9 @@ if __name__ == "__main__":
     rose_diagram_for_all_minerals(r, "extinction_angle", "pixel")
     rose_diagram_for_all_minerals(r, "extinction_angle", "grain")
     histogram_for_all_minerals(r, "eccentricity", "grain")
-    histogram_for_all_minerals(r, "max_retardation_map", "pixel")
     histogram_for_all_minerals(r, "extinction_angle", "pixel")
     histogram_for_all_minerals(r, "extinction_angle", "grain")
     scatter_for_all_minerals(r, "azimuth", "extinction_angle")
-    scatter_for_all_minerals(r, "R", "sd_azimuth")
+    scatter_for_all_minerals(r, "size", "sd_azimuth")
 
     # histogram_for_all_minerals(r, "eccentricity", "map")

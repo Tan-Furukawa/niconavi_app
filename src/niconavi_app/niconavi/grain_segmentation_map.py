@@ -133,7 +133,6 @@ def make_grain_segmented_maps(grain_list: list[Grain]) -> GrainSegmentedMaps:
         grain_list, "sd_extinction_angle"
     )
 
-    R = get_number_map_from_grain_list_key(grain_list, "R")
 
     size = get_number_map_from_grain_list_key(grain_list, "size")
 
@@ -153,9 +152,6 @@ def make_grain_segmented_maps(grain_list: list[Grain]) -> GrainSegmentedMaps:
         grain_list, "minor_axis_length"
     )
 
-    R70 = get_number_map_from_grain_list_key(grain_list, "R70")
-    R80 = get_number_map_from_grain_list_key(grain_list, "R80")
-    R90 = get_number_map_from_grain_list_key(grain_list, "R90")
     m45_R_color_map = get_rgb_map_from_grain_list_key(grain_list, "m45_color")
     m45_R_map = get_number_map_from_grain_list_key(grain_list, "mR")
     p45_R_color_map = get_rgb_map_from_grain_list_key(grain_list, "p45_color")
@@ -174,7 +170,6 @@ def make_grain_segmented_maps(grain_list: list[Grain]) -> GrainSegmentedMaps:
         "R_color_map": R_color,
         "extinction_color_map": extinction_color,
         "extinction_angle": extinction_angle,
-        "max_retardation_map": R,
         "size": size,
         "extinction_angle_quality": quality,
         "H": H,
@@ -184,9 +179,6 @@ def make_grain_segmented_maps(grain_list: list[Grain]) -> GrainSegmentedMaps:
         "angle_deg": angle_deg,
         "major_axis_length": major_axis_length,
         "minor_axis_length": minor_axis_length,
-        "R_70_map": R70,
-        "R_80_map": R80,
-        "R_90_map": R90,
         "m45_R_color_map": m45_R_color_map,
         "m45_R_map": m45_R_map,
         "p45_R_color_map": p45_R_color_map,

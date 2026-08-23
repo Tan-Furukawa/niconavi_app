@@ -219,11 +219,11 @@ class AnalysisTab:
         # self.map_rose_diagram_target: State[Literal["azimuth", "extinction_angle"]] = (
         #     State("extinction_angle")
         # )
-        self.grain_histogram_target: State[GrainNumLiteral] = State("R")
+        self.grain_histogram_target: State[GrainNumLiteral] = State("size")
         # self.map_histogram_target: State[RawMapsNumLiteral] = State(
         #     "max_retardation_map"
         # )
-        self.scatter_target_x: State[GrainNumLiteral] = State("R")
+        self.scatter_target_x: State[GrainNumLiteral] = State("size")
         self.scatter_target_y: State[GrainNumLiteral] = State("extinction_angle")
         self.scatter_show_regression: State[bool] = State(True)
         self.scatter_regression_origin: State[bool] = State(True)
@@ -466,6 +466,9 @@ class ColorChartState:
         self.xpl_alpha: State[Optional[float]] = State(None)
         self.pol_lambda_alpha: State[Optional[float]] = State(None)
         self.inc_alpha: State[Optional[float]] = State(None)
+        # Derived from optical_parameters.thickness by
+        # make_retardation_color_chart, which writes them back here. The video
+        # tab shows them, but the thickness is what the user types.
         self.xpl_max_retardation: State[float] = State(300)
         self.pol_lambda_max_retardation: State[Optional[float]] = State(1500.0)
         self.inc_max_retardation: State[Optional[float]] = State(300 + 530)

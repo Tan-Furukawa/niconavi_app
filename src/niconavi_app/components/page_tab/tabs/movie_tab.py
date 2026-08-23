@@ -37,6 +37,7 @@ from niconavi_app.niconavi.tools.str_parser import parse_larger_than_0, parse_in
 from niconavi_app.tools.error import exec_at_error
 
 from niconavi_app.niconavi.custom_error import NoVideoError
+from niconavi_app.niconavi.optics.tools import get_max_retardation_from_thickness
 from niconavi_app.niconavi.image.type import RGBPicture
 from niconavi_app.niconavi.image.image import resize_img
 from niconavi_app.niconavi.tools.read_data import (
@@ -602,18 +603,47 @@ class MovieTab(ft.Container):
             enable_web_upload=page.web,
         )
 
-        xpl_max_R_input = make_reactive_float_text_filed(
+        # The thickness is asked for here, not on the analysis tab, because
+        # every step from the map tab onwards needs it: the retardation colour
+        # charts are cut off at the largest retardation this thickness can
+        # produce, and the addition/subtraction branch behind the azimuth is
+        # decided against a LUT built from it. It used to be entered on the
+        # analysis tab, which the user only reaches afterwards, so those steps
+        # silently ran on its default.
+        thickness_input = make_reactive_float_text_filed(
             stores,
-            stores.computation_result.color_chart.xpl_max_retardation,
+            stores.computation_result.optical_parameters.thickness,
             parse_larger_than_0,
             accept_None=False,
         )
 
+        def max_retardation_nm() -> float:
+            return get_max_retardation_from_thickness(
+                stores.computation_result.optical_parameters.thickness.get(),
+                no=stores.computation_result.optical_parameters.no.get(),
+                ne=stores.computation_result.optical_parameters.ne.get(),
+            )
+
+        max_retardation_watched = [
+            stores.computation_result.optical_parameters.thickness,
+            stores.computation_result.optical_parameters.no,
+            stores.computation_result.optical_parameters.ne,
+        ]
+
+        xpl_max_R = CustomReactiveText(
+            ReactiveState(
+                lambda: f"{max_retardation_nm():.1f}",
+                max_retardation_watched,
+            )
+        )
+
         xpl_pol_max_R = CustomReactiveText(
             ReactiveState(
-                lambda: f"{stores.computation_result.color_chart.xpl_max_retardation.get() + stores.computation_result.full_wave_plate_nm.get()}",
+                lambda: (
+                    f"{max_retardation_nm() + stores.computation_result.full_wave_plate_nm.get():.1f}"
+                ),
                 [
-                    stores.computation_result.color_chart.xpl_max_retardation,
+                    *max_retardation_watched,
                     stores.computation_result.full_wave_plate_nm,
                 ],
             )
@@ -658,8 +688,15 @@ class MovieTab(ft.Container):
                 ),
                 ft.Row(
                     [
+                        CustomText("thin section thickness ="),
+                        thickness_input,
+                        CustomText("mm"),
+                    ]
+                ),
+                ft.Row(
+                    [
                         CustomText("max retardation ="),
-                        xpl_max_R_input,
+                        xpl_max_R,
                         CustomText("nm"),
                     ]
                 ),

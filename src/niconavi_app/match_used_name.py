@@ -19,7 +19,6 @@ RoseDiagramDisplayInPixel = ["extinction angle", "azimuth"]
 
 RawMapsNumListUsedInPlot = [
     "extinction_angle",
-    "max_retardation_map",
     "p45_R_map",
     "m45_R_map",
     "azimuth",
@@ -28,7 +27,6 @@ RawMapsNumListUsedInPlot = [
 
 RawMapsNumListDisplayInPlot = [
     "extinction angle (Φ)",
-    "retardation",
     "XPL+λ Φ+45",
     "XPL+λ Φ-45",
     "azimuth",
@@ -36,7 +34,6 @@ RawMapsNumListDisplayInPlot = [
 
 
 GrainNumListUsedInPlot = [
-    "R",
     "extinction_angle",
     "azimuth",
     "inclination",
@@ -52,7 +49,6 @@ GrainNumListUsedInPlot = [
 ]
 
 GrainNumListDisplayInPlot = [
-    "retardation",
     "extinction angle",
     "azimuth",
     "inclination",

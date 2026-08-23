@@ -67,9 +67,13 @@ from niconavi_app.niconavi.cpo_pipeline import (
 def onclick_cip_start_button(
     stores: Stores, e: ft.FilePickerResultEvent, page: Optional[Page], *, logger: Logger
 ) -> None:
-    # CPO input is thickness only now (Max R retired, see move_v3.md).
+    # The thickness is a video-tab input: the colour charts and the addition
+    # branch are already built from it long before this runs.
     if stores.computation_result.optical_parameters.thickness.get() is None:
-        update_logs(stores, ("Please provide the thickness value.", "err"))
+        update_logs(
+            stores,
+            ("Please provide the thickness value on the video tab.", "err"),
+        )
         return None
 
     def log(message: str, level: str = "msg") -> None:
@@ -504,21 +508,6 @@ def make_grain_stat_method_radio(
     )
 
 
-def make_cip_thickness_input(
-    stores: Stores,
-) -> ft.Row:
-    # Thickness is the only CPO inclination input now (Max R retired), so it is
-    # always shown - no longer gated on the removed estimate_inclination_by radio.
-    input = make_reactive_float_text_filed(
-        stores,
-        stores.computation_result.optical_parameters.thickness,
-        parse_larger_than_0,
-        accept_None=False,
-    )
-
-    return ft.Row([input, CustomText("mm")])
-
-
 def make_cip_bandwidth_input(
     stores: Stores,
 ) -> ft.Row:
@@ -817,7 +806,6 @@ class AnalysisTab(ft.Container):
         )
         no, ne = make_CIP_no_and_ne_input(stores)
         pixel_or_grain_radio = make_pixel_or_grain_radio_button(stores)
-        cip_thickness = make_cip_thickness_input(stores)
         cip_normalize_90 = make_cip_normalize_90_checkbox(stores)
         cip_start_button = make_cip_start_button(stores, page, logger=logger)
         cip_bandwidth = make_cip_bandwidth_input(stores)
@@ -990,8 +978,6 @@ class AnalysisTab(ft.Container):
                             [
                                 CustomText("refractive indices (default: quartz)"),
                                 ft.Row([CustomText("ω ="), no, CustomText(" ε ="), ne]),
-                                CustomText("thickness (mm)"),
-                                cip_thickness,
                                 cip_normalize_90,
                                 cip_start_button,
                                 InformationPanel(
