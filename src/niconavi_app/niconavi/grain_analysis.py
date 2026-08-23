@@ -55,10 +55,7 @@ from niconavi_app.niconavi.statistics.array_to_float import (
     get_middle_val,
     circular_median,
     get_True_len,
-    percentile_70_with_nan,
     percentile_75_with_nan,
-    percentile_80_with_nan,
-    percentile_90_with_nan,
     sd_extinction_angle_with_nan,
     sd_azimuth_with_nan,
 )
@@ -470,7 +467,7 @@ def analyze_grain(
     circ_threshold: float,
 ) -> list[Grain]:
 
-    if maps["max_retardation_map"] is not None:
+    if maps["R_color_map"] is not None:
         apply_all = synthesize_all_fn_in_array(
             [
                 apply_grain_mask(
@@ -482,28 +479,6 @@ def analyze_grain(
                     maps["cv_extinction_angle"],
                     mean_with_nan,
                     key="exQuality",
-                ),
-                apply_grain_mask(
-                    maps["max_retardation_map"],
-                    median_with_nan,
-                    key="R",
-                    method="tiny_circ",
-                    circ_threshold=circ_threshold,
-                ),
-                apply_grain_mask(
-                    maps["max_retardation_map"],
-                    percentile_70_with_nan,
-                    key="R70",
-                ),
-                apply_grain_mask(
-                    maps["max_retardation_map"],
-                    percentile_80_with_nan,
-                    key="R80",
-                ),
-                apply_grain_mask(
-                    maps["max_retardation_map"],
-                    percentile_90_with_nan,
-                    key="R90",
                 ),
                 apply_grain_mask(
                     maps["extinction_angle"],

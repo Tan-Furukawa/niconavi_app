@@ -666,6 +666,11 @@ def make_raw_R_maps(
         and is_not_None_type(params.color_chart.xpl_retardation_color_chart)
     ):
         try:
+            max_retardation = get_max_retardation_from_thickness(
+                params.optical_parameters.thickness,
+                no=params.optical_parameters.no,
+                ne=params.optical_parameters.ne,
+            )
             return ComputationResult(
                 **{
                     **params.__dict__,
@@ -679,27 +684,12 @@ def make_raw_R_maps(
                         full_wave_plate=params.full_wave_plate_nm,
                         # 以下パラメータは、検板を含む光学系のRetardation評価のときのみ活躍する。
                         # 検板が挿入されたときの画像のRは、min{0,530 - R_xpl} < R R_xpl + 530nmまで検査する
-                        max_R=params.full_wave_plate_nm
-                        + params.color_chart.xpl_max_retardation,
-                        min_R=np.min(
-                            params.full_wave_plate_nm
-                            - params.color_chart.xpl_max_retardation,
-                            0,
-                        ),
-                        # The Theta LUT is built from the thickness implied
-                        # by xpl_max_retardation, not optical_parameters
-                        # .thickness: the thickness field is entered on the
-                        # analysis tab, which the user only reaches after this
-                        # runs, so at this point it still holds its default.
-                        # xpl_max_retardation is a video-tab input, and it is
-                        # what min_R/max_R above already used to bound the
-                        # chart - so the LUT spans exactly the band the chart
-                        # was allowed to answer from.
-                        thickness_mm=get_thickness_from_max_retardation(
-                            max_retardation=params.color_chart.xpl_max_retardation,
-                            no=params.optical_parameters.no,
-                            ne=params.optical_parameters.ne,
-                        ),
+                        max_R=params.full_wave_plate_nm + max_retardation,
+                        min_R=params.full_wave_plate_nm - max_retardation,
+                        # Same thickness the LUT behind the addition/
+                        # subtraction branch is built from, so the bounds above
+                        # and the LUT describe one thin section.
+                        thickness_mm=params.optical_parameters.thickness,
                         no=params.optical_parameters.no,
                         ne=params.optical_parameters.ne,
                     ),
@@ -896,7 +886,14 @@ def make_retardation_color_chart(
 
         # cross nicol
         # --------------------------------------------
-        xpl_end = params.color_chart.xpl_max_retardation
+        # The chart runs from 0 to the largest retardation this thin section
+        # can produce, which the thickness fixes. xpl_max_retardation is kept
+        # in sync as a derived value; it is no longer an input of its own.
+        xpl_end = get_max_retardation_from_thickness(
+            params.optical_parameters.thickness,
+            no=params.optical_parameters.no,
+            ne=params.optical_parameters.ne,
+        )
         chart_xpl = get_retardation_color_chart_with_nd_filter(
             start=0,
             end=xpl_end,
@@ -915,7 +912,7 @@ def make_retardation_color_chart(
         progress_callback(None)
         # cross nicol + full wave plate
         # --------------------------------------------
-        pol_lambda_end = params.color_chart.pol_lambda_max_retardation
+        pol_lambda_end = xpl_end + params.full_wave_plate_nm
         if (
             pol_lambda_end is not None
             and p45_color_map is not None
@@ -956,6 +953,10 @@ def make_retardation_color_chart(
                 "color_chart": ColorChart(
                     **{
                         **params.color_chart.__dict__,
+                        "xpl_max_retardation": xpl_end,
+                        "pol_lambda_max_retardation": (
+                            pol_lambda_end if pol_lambda_R_array is not None else None
+                        ),
                         "xpl_retardation_color_chart": index_xpl["color_chart_1d"],
                         "xpl_R_array": chart_xpl["w"],
                         "xpl_alpha": index_xpl["best_h"],
