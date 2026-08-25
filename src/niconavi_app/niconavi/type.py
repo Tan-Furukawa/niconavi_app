@@ -456,6 +456,10 @@ class ComputationResult:
         mask: Optional[D2BoolArray] = None,
         resolution_width: int = 1000,
         full_wave_plate_nm: float = 530.0,
+        # Gray-world white balance of every frame read from the videos,
+        # applied by run_all.load_data. Fixed for the run once "start" is
+        # pressed, so the video tab only lets it be set before that; the gains
+        # that were used are recorded beside it.
         apply_white_balance: bool = False,
         white_balance_gains: Optional[tuple[float, float, float]] = None,
         circ_threshold: float = 0.5,
