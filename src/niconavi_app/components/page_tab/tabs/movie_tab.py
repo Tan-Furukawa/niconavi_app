@@ -24,6 +24,7 @@ from niconavi_app.components.common_component import (
     CustomReactiveText,
     confirm_action,
     confirm_discard_downstream,
+    make_solidable_checkbox,
     VIDEO_TAB_STAGE,
 )
 
@@ -90,6 +91,18 @@ def load_data_clicked(stores: Stores, *, logger: Logger) -> None:
                 ("Stage rotation center determination completed.", "ok"),
                 logger=logger,
             )
+
+            gains = r.white_balance_gains
+            if gains is not None:
+                update_logs(
+                    stores,
+                    (
+                        "Gray-world white balance applied to every frame. "
+                        f"RGB gains: {gains[0]:.3f}, {gains[1]:.3f}, {gains[2]:.3f}.",
+                        "ok",
+                    ),
+                    logger=logger,
+                )
 
             update_progress_bar(0.0, stores)
 
@@ -649,6 +662,17 @@ class MovieTab(ft.Container):
             )
         )
 
+        # Gray-world white balance of every frame, using the gains estimated
+        # from the first XPL frame. load_data bakes it into the frames, so it
+        # can only be chosen before "start" - afterwards the checkbox turns
+        # into a read-only line saying what the run used.
+        white_balance_checkbox = make_solidable_checkbox(
+            "gray-world white balance",
+            stores.computation_result.apply_white_balance,
+            lambda: not stores.ui.once_start.get(),
+            [stores.ui.once_start],
+        )
+
         full_wave_plate_nm_input = make_reactive_float_text_filed(
             stores,
             stores.computation_result.full_wave_plate_nm,
@@ -749,6 +773,7 @@ class MovieTab(ft.Container):
                     ]
                 ),
                 ft.Divider(),
+                white_balance_checkbox,
                 execute_button,
                 recalculate_maps,
                 reset_button,
