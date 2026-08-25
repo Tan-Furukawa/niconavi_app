@@ -240,6 +240,7 @@ class AnalysisTab:
         self.cip_bandwidth: State[float] = State(6.)
         self.cip_contour: State[int] = State(10)
         self.cip_theme: State[str] = State("jet")
+        self.cip_color_mode: State[Literal["discrete", "continuous"]] = State("discrete")
         self.cip_display_points: State[bool] = State(False)
         self.cip_points_noise_size_percent: State[float] = State(0.5)
         # CPO 90 deg normalize (default on): rescale the selected grains'

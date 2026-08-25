@@ -513,6 +513,7 @@ def plot_polar_distribution(
             plot_points=stores.ui.analysis_tab.cip_display_points.get(),
             levels=stores.ui.analysis_tab.cip_contour.get(),
             cmap=stores.ui.analysis_tab.cip_theme.get(),
+            color_mode=stores.ui.analysis_tab.cip_color_mode.get(),
         )
         stores.ui.displayed_fig.set(deepcopy(fig))
         set_default_figure_style(fig, ax, method="polar plot")
