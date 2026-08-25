@@ -20,6 +20,7 @@ from niconavi_app.niconavi.color_correction import (
     ALPHA_MAX,
 )
 from niconavi_app.niconavi.reconstruction import make_inscribed_circle_mask
+from niconavi_app.app_config import CPO_NORMALIZE_PERCENTILE
 from niconavi_app.niconavi.cpo_normalization import (
     apply_arcsin_percentile_correction,
     compute_corrected_thickness_mm,
@@ -183,12 +184,15 @@ def estimate_theta_magnitude_from_add_image(
     thickness_mm: float,
     *,
     normalize_90: bool = True,
+    percentile: float = CPO_NORMALIZE_PERCENTILE,
 ) -> tuple[np.ndarray, float, float]:
     """Grain-constant inclination magnitude map in [0, 90] (NaN outside
-    segmented grains), the arcsin/P95-corrected thickness, and Theta_error_max.
+    segmented grains), the arcsin/percentile-corrected thickness, and
+    Theta_error_max (the `percentile`-th percentile rescaled to 90 deg).
 
-    When normalize_90 is False the arcsin/P95 correction is skipped: the map is
-    the raw add-image Theta and the returned thickness equals thickness_mm.
+    When normalize_90 is False the arcsin/percentile correction is skipped: the
+    map is the raw add-image Theta and the returned thickness equals
+    thickness_mm (Theta_error_max is still reported for reference).
     """
     add_image, _p45_selected = make_addition_image(raw_maps)
     labels, rows, cols = find_grain_center_pixels(grain_map, valid_mask)
@@ -201,13 +205,15 @@ def estimate_theta_magnitude_from_add_image(
     theta_raw = theta_grid[theta_index]
 
     if normalize_90:
-        theta_used, theta_error_max = apply_arcsin_percentile_correction(theta_raw)
+        theta_used, theta_error_max = apply_arcsin_percentile_correction(
+            theta_raw, percentile=percentile
+        )
         corrected_thickness = compute_corrected_thickness_mm(
             theta_error_max, thickness_mm, no=OPTICAL_NO, ne=OPTICAL_NE
         )
     else:
         theta_used = theta_raw
-        theta_error_max = float(np.nanpercentile(theta_raw, 95.0))
+        theta_error_max = float(np.nanpercentile(theta_raw, percentile))
         corrected_thickness = thickness_mm
 
     theta_map = make_grain_theta_map(

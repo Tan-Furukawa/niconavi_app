@@ -4,6 +4,7 @@
 #! このコードは自動生成されています。手動で編集をしないでください。
 #!------------------------------------------------------
 
+from niconavi_app.app_config import CPO_NORMALIZE_PERCENTILE
 from niconavi_app.state import State
 from niconavi_app.niconavi.image.type import Color, RGBPicture, MonoColorPicture, D1RGB_Array
 from typing import TypedDict, Optional, Literal, cast, Any
@@ -246,6 +247,11 @@ class AnalysisTab:
         # CPO 90 deg normalize (default on): rescale the selected grains'
         # inclination so their P95 maps to 90 deg (see cpo_normalization).
         self.cip_normalize_90: State[bool] = State(True)
+        # Which percentile of the selected grains' inclination is rescaled to
+        # 90 deg. Editable next to the checkbox; CPO_NORMALIZE_PERCENTILE is
+        # the value the field starts at, and the user edits it per run.
+        # See make_cip_normalize_percentile_input.
+        self.cip_normalize_percentile: State[float] = State(CPO_NORMALIZE_PERCENTILE)
         # Info panel text for the CPO plot, set when "calculate" is pressed:
         # which grains were used, the M/b/alpha fit, and (when normalize is on)
         # the predicted thickness. Non-interactive - not tied to grain toggles.

@@ -57,6 +57,22 @@ def parse_int_smaller_than(max_val: int) -> Callable[[str], int | None]:
 
 
 
+def parse_percentile(s: str) -> float | None:
+    """0 < value <= 100, for a percentile input. Unlike parse_percent the range
+    is checked for integer input too, so nanpercentile never sees an out-of-
+    range value."""
+
+    def percentile(s: str) -> float:
+        v = float(s)
+        if 0 < v and v <= 100:
+            return v
+        raise ValueError(
+            "invalid value input: percentile value must 0 < val and val <= 100"
+        )
+
+    return parse_float(s, percentile)
+
+
 def parse_odd_int(s: str) -> int | None:
     if s == "":
         return None
