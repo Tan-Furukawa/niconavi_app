@@ -17,6 +17,7 @@ from typing import Callable, Optional
 import numpy as np
 from matplotlib.figure import Figure
 
+from niconavi_app.app_config import CPO_NORMALIZE_PERCENTILE
 from niconavi_app.niconavi.color_correction import (
     ColorCorrectionFit,
     apply_color_correction,
@@ -57,6 +58,7 @@ def estimate_cpo_orientation(
     result: ComputationResult,
     *,
     normalize_90: bool = True,
+    percentile: float = CPO_NORMALIZE_PERCENTILE,
     progress_callback: Callable[[float | None], None] = lambda p: None,
     log_callback: Callable[[str], None] = lambda m: None,
 ) -> CPOOrientationResult:
@@ -76,13 +78,18 @@ def estimate_cpo_orientation(
     valid_mask = np.asarray(tilt0["image_mask"], dtype=bool)
     azimuth_map = np.asarray(raw_maps["azimuth"], dtype=np.float64) % 180.0
 
-    # 1. Inclination magnitude [0, 90] (arcsin/P95 corrected when normalize_90)
-    #    + the thickness that reading implies.
+    # 1. Inclination magnitude [0, 90] (arcsin/percentile corrected when
+    #    normalize_90) + the thickness that reading implies.
     progress_callback(0.2)
     log_callback("Building the addition image and estimating inclination θ...")
     theta_magnitude_map, corrected_thickness, theta_error_max = (
         estimate_theta_magnitude_from_add_image(
-            raw_maps, grain_map, valid_mask, thickness0, normalize_90=normalize_90
+            raw_maps,
+            grain_map,
+            valid_mask,
+            thickness0,
+            normalize_90=normalize_90,
+            percentile=percentile,
         )
     )
 
@@ -278,6 +285,7 @@ def format_cpo_orientation_info(
     *,
     orientation: CPOOrientationResult,
     normalize_90: bool,
+    percentile: float = CPO_NORMALIZE_PERCENTILE,
     displayed_minerals: Optional[list] = None,
 ) -> str:
     """Multi-line CPO Info-panel text: the grains/orientation source, the
@@ -293,7 +301,8 @@ def format_cpo_orientation_info(
     lines.append(f"90 deg normalize: {'on' if normalize_90 else 'off'}")
     if normalize_90:
         lines.append(
-            f"  Theta(P95) -> 90 deg: {orientation.theta_error_max_deg:.2f} deg"
+            f"  Theta(P{percentile:g}) -> 90 deg: "
+            f"{orientation.theta_error_max_deg:.2f} deg"
         )
         lines.append(
             f"  Predicted thickness: {orientation.corrected_thickness_mm:.5f} mm"

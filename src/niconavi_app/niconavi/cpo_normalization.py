@@ -1,11 +1,13 @@
-"""CPO "90 deg normalize": rescale a population of grain inclinations so their
-P95 maps to 90 deg, and derive the thickness that reading implies.
+"""CPO "90 deg normalize": rescale a population of grain inclinations so a
+chosen percentile maps to 90 deg, and derive the thickness that reading
+implies.
 
 Ported from fix/ebsd_adjustment_v3/run_theta_from_color.py
 (apply_arcsin_percentile_correction / compute_corrected_thickness_mm). The
-percentile lives in app_config (CPO_NORMALIZE_PERCENTILE); the refractive
-indices are supplied by the caller (params.optical_parameters.no/ne) rather
-than hard-coded as they were in the v3 stereo module.
+percentile is an analysis-tab input defaulting to app_config's
+CPO_NORMALIZE_PERCENTILE; the refractive indices are supplied by the caller
+(params.optical_parameters.no/ne) rather than hard-coded as they were in the v3
+stereo module.
 """
 
 from __future__ import annotations
@@ -25,9 +27,9 @@ def apply_arcsin_percentile_correction(
     population - a robust stand-in for "the most steeply inclined grain" that
     is less sensitive to a single outlier than the max.
 
-    This rescales sin(Theta) so the P95 grain maps to 90 deg; grains above the
-    P95 threshold have their ratio clipped to 1 (arcsin domain) and so also map
-    to 90 deg. Returns (theta_corrected (same shape), theta_error_max used).
+    This rescales sin(Theta) so the percentile grain maps to 90 deg; grains
+    above that threshold have their ratio clipped to 1 (arcsin domain) and so
+    also map to 90 deg. Returns (theta_corrected (same shape), theta_error_max used).
     NaNs pass through unchanged and are ignored by the percentile.
     """
     theta = np.asarray(theta_deg, dtype=np.float64)
@@ -43,9 +45,10 @@ def rescale_inclination_map_with_theta_error_max(
     theta_deg: np.ndarray,
     theta_error_max_deg: float,
 ) -> np.ndarray:
-    """Apply the same arcsin/P95 rescale as apply_arcsin_percentile_correction
-    but with an externally supplied theta_error_max (so a per-pixel inclination
-    MAP can be normalized with the P95 derived from the selected grains). The
+    """Apply the same arcsin/percentile rescale as
+    apply_arcsin_percentile_correction but with an externally supplied
+    theta_error_max (so a per-pixel inclination MAP can be normalized with the
+    threshold derived from the selected grains). The
     0-180 hemisphere structure is preserved: a lower-hemisphere reading
     (90..180) stays lower after correction. NaNs pass through unchanged."""
     theta = np.asarray(theta_deg, dtype=np.float64)

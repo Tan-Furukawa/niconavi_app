@@ -51,6 +51,7 @@ import traceback
 from niconavi_app.niconavi.tools.str_parser import (
     parse_larger_than_0,
     parse_int,
+    parse_percentile,
 )
 from niconavi_app.tools.validation import validation_larger_than_0_float
 from niconavi_app.components.page_tab.tabs.reset_onclick import reset_onclick_cip_computation_button
@@ -100,9 +101,11 @@ def onclick_cip_start_button(
         # overrides raw_maps inclination / inclination_0_to_180 / azimuth360
         # so every CPO plot (grain & pixel, 90/180/360, map-COI) matches.
         normalize_90 = stores.ui.analysis_tab.cip_normalize_90.get()
+        percentile = stores.ui.analysis_tab.cip_normalize_percentile.get()
         info_text, orientation = _run_cpo_orientation_pipeline(
             r,
             normalize_90=normalize_90,
+            percentile=percentile,
             progress_callback=lambda p: update_progress_bar(p, stores),
             log=log,
         )
@@ -142,6 +145,7 @@ def _run_cpo_orientation_pipeline(
     r,
     *,
     normalize_90: bool,
+    percentile: float,
     progress_callback: Callable[[float | None], None] = lambda p: None,
     log: Callable[..., None] = lambda *a, **k: None,
 ) -> tuple[str, Optional[CPOOrientationResult]]:
@@ -162,6 +166,7 @@ def _run_cpo_orientation_pipeline(
     orientation = estimate_cpo_orientation(
         r,
         normalize_90=normalize_90,
+        percentile=percentile,
         progress_callback=progress_callback,
         log_callback=lambda m: log(m),
     )
@@ -177,6 +182,7 @@ def _run_cpo_orientation_pipeline(
     info_text = format_cpo_orientation_info(
         orientation=orientation,
         normalize_90=normalize_90,
+        percentile=percentile,
         displayed_minerals=displayed_minerals,
     )
     return info_text, orientation
@@ -589,10 +595,26 @@ def make_cip_normalize_90_checkbox(stores: Stores) -> CustomReactiveCheckbox:
         ),
     )
 
-    # return ft.ElevatedButton(
-    #     "start CIP computation",
-    #     on_click=lambda e: onclick_cip_start_button(stores, e, logger=logger),
-    # )
+
+def make_cip_normalize_percentile_input(stores: Stores) -> ft.Row:
+    """Which percentile of the selected grains' inclination is rescaled to
+    90 deg. Only meaningful while 90° normalize is on, so the row follows the
+    checkbox."""
+
+    input = make_reactive_float_text_filed(
+        stores,
+        stores.ui.analysis_tab.cip_normalize_percentile,
+        parse_percentile,
+        accept_None=False,
+    )
+    return ReactiveRow(
+        [
+            CustomText("percentile"),
+            input,
+            CustomText("%"),
+        ],
+        visible=stores.ui.analysis_tab.cip_normalize_90,
+    )
 
 
 def make_CIP_no_and_ne_input(
@@ -823,6 +845,7 @@ class AnalysisTab(ft.Container):
         no, ne = make_CIP_no_and_ne_input(stores)
         pixel_or_grain_radio = make_pixel_or_grain_radio_button(stores)
         cip_normalize_90 = make_cip_normalize_90_checkbox(stores)
+        cip_normalize_percentile = make_cip_normalize_percentile_input(stores)
         cip_start_button = make_cip_start_button(stores, page, logger=logger)
         cip_bandwidth = make_cip_bandwidth_input(stores)
         cip_theme = make_cip_theme_input(stores)
@@ -996,6 +1019,7 @@ class AnalysisTab(ft.Container):
                                 CustomText("refractive indices (default: quartz)"),
                                 ft.Row([CustomText("ω ="), no, CustomText(" ε ="), ne]),
                                 cip_normalize_90,
+                                cip_normalize_percentile,
                                 cip_start_button,
                                 InformationPanel(
                                     stores.ui.analysis_tab.cip_stats_text,

@@ -27,7 +27,9 @@ ENABLE_FUNCTION_TAB = False
 
 ENABLE_TILT_REF_MEDIAN_CORRECTION = False
 
-# CPO "90 deg normalize": percentile of the selected grains' inclination that
-# is rescaled to 90 deg (a robust stand-in for "the most steeply inclined
-# grain"). Grains above it clip to 90 deg. See niconavi.cpo_normalization.
+# CPO "90 deg normalize": the STARTING percentile of the selected grains'
+# inclination that is rescaled to 90 deg (a robust stand-in for "the most
+# steeply inclined grain"); grains above it clip to 90 deg. Unlike the rest of
+# this module this one is exposed - the analysis tab's percentile field is
+# seeded from it and the user edits it per run. See niconavi.cpo_normalization.
 CPO_NORMALIZE_PERCENTILE: float = 95.0
