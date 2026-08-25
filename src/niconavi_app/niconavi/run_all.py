@@ -47,6 +47,13 @@ from niconavi_app.niconavi.image.image import (
     resize_image_list,
     create_outside_circle_mask,
 )
+from niconavi_app.niconavi.image.white_balance import (
+    GRAY_WORLD_CORRECTION_STRENGTH,
+    apply_rgb_gains,
+    apply_rgb_gains_to_frames,
+    blend_gains,
+    gray_world_mean_gains,
+)
 from niconavi_app.niconavi.image.type import Color, D1RGB_Array
 from niconavi_app.niconavi.make_map import (
     make_color_maps,
@@ -111,6 +118,75 @@ def make_err_msg(params: ComputationResult, *keys: str) -> str:
 
 
 def load_data(
+    params: ComputationResult,
+    progress_callback: Callable[[float | None], None] = lambda p: None,
+) -> ComputationResult:
+    return white_balance_loaded_frames(
+        read_frames_from_videos(params, progress_callback)
+    )
+
+
+def white_balance_loaded_frames(params: ComputationResult) -> ComputationResult:
+    """Gray-world white balance every frame just read from the videos.
+
+    One RGB gain set is estimated from the first XPL frame and applied
+    unchanged to every other frame, so only the shared colour cast of the lamp
+    is removed and no relative colour or brightness comparison between frames
+    is disturbed. This is the same correction the inclination pipeline of
+    fix/ebsd_adjustment_v3 applies before it resolves the theta / 180 - theta
+    branch (lib.white_balance.apply_gray_world_white_balance); doing it here
+    instead means every downstream map is built from corrected frames rather
+    than the maps being corrected after the fact.
+
+    Off by default, so the scripts that drive this pipeline themselves (which
+    apply their own correction later) are unaffected.
+    """
+    if not params.apply_white_balance:
+        return params
+
+    reference_image = params.first_image.get("xpl")
+    if reference_image is None:
+        return params
+
+    gains = blend_gains(
+        gray_world_mean_gains(reference_image), GRAY_WORLD_CORRECTION_STRENGTH
+    )
+    print(f"Gray-world RGB gains: {gains} (strength={GRAY_WORLD_CORRECTION_STRENGTH})")
+
+    tilt_image_info = TiltImageInfo(
+        **{
+            **params.tilt_image_info.__dict__,
+            "image0_raw": apply_rgb_gains_to_frames(
+                params.tilt_image_info.image0_raw, gains
+            ),
+            "image45_raw": apply_rgb_gains_to_frames(
+                params.tilt_image_info.image45_raw, gains
+            ),
+            "tilt_image0_raw": apply_rgb_gains_to_frames(
+                params.tilt_image_info.tilt_image0_raw, gains
+            ),
+            "tilt_image45_raw": apply_rgb_gains_to_frames(
+                params.tilt_image_info.tilt_image45_raw, gains
+            ),
+        }
+    )
+
+    return ComputationResult(
+        **{
+            **params.__dict__,
+            "pics": apply_rgb_gains_to_frames(params.pics, gains),
+            "reta_pics": apply_rgb_gains_to_frames(params.reta_pics, gains),
+            "tilt_image_info": tilt_image_info,
+            "first_image": {
+                key: (None if image is None else apply_rgb_gains(image, gains))
+                for key, image in params.first_image.items()
+            },
+            "white_balance_gains": tuple(float(gain) for gain in gains),
+        }
+    )
+
+
+def read_frames_from_videos(
     params: ComputationResult,
     progress_callback: Callable[[float | None], None] = lambda p: None,
 ) -> ComputationResult:

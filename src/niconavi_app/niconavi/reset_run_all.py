@@ -60,6 +60,7 @@ def reset_load_data(
             "resolution_height": None,
             "video_path": None,
             "reta_video_path": None,
+            "white_balance_gains": None,
             "tilt_image_info": tilt_img,
             "first_image": {
                 **params.first_image,

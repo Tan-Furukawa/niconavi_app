@@ -503,6 +503,11 @@ class ComputationResultState:
         self.mask: State[Optional[D2BoolArray]] = State(None)
         self.resolution_width: State[int] = State(1000)
         self.full_wave_plate_nm: State[float] = State(530.0)
+        # Gray-world white balance of every frame read from the videos, applied
+        # by run_all.load_data. Fixed for the run once "start" is pressed, so
+        # the video tab only lets it be set before that.
+        self.apply_white_balance: State[bool] = State(False)
+        self.white_balance_gains: State[Optional[tuple[float, float, float]]] = State(None)
         self.circ_threshold: State[float] = State(0.5)
         self.angle_between_x_and_thin_section_axis_at_tilt: State[float] = State(45)
         self.use_raw_in_grain_boundary_detection: State[bool] = State(False)

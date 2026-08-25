@@ -456,6 +456,8 @@ class ComputationResult:
         mask: Optional[D2BoolArray] = None,
         resolution_width: int = 1000,
         full_wave_plate_nm: float = 530.0,
+        apply_white_balance: bool = False,
+        white_balance_gains: Optional[tuple[float, float, float]] = None,
         circ_threshold: float = 0.5,
         angle_between_x_and_thin_section_axis_at_tilt: float = 45,
         use_raw_in_grain_boundary_detection: bool = False,
@@ -535,6 +537,8 @@ class ComputationResult:
         self.resolution_width = resolution_width
         self.circ_threshold = circ_threshold
         self.full_wave_plate_nm = full_wave_plate_nm
+        self.apply_white_balance = apply_white_balance
+        self.white_balance_gains = white_balance_gains
         self.angle_between_x_and_thin_section_axis_at_tilt = (
             angle_between_x_and_thin_section_axis_at_tilt
         )

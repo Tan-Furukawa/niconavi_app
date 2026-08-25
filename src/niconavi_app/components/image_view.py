@@ -74,6 +74,9 @@ class ImageView(ft.Container):
             stores.ui.display_grain_boundary,
             stores.ui.analysis_tab.cip_bandwidth,
             stores.computation_result.first_image,
+            # The movie tab previews its frames white-balanced or not
+            # depending on this, so flipping it has to redraw the view.
+            stores.computation_result.apply_white_balance,
             stores.computation_result.rotation_img,
             stores.computation_result.center_int_x,
             stores.computation_result.center_int_y,
