@@ -2,6 +2,9 @@
 #!------------------------------------------------------
 #! This code is automatically generated.
 #! このコードは自動生成されています。手動で編集をしないでください。
+#! UI stores -> make_stores/template.py
+#! ComputationResultState -> niconavi/type.py
+#! いずれかを編集して make_stores.py を実行し直すこと。
 #!------------------------------------------------------
 
 from niconavi_app.app_config import CPO_NORMALIZE_PERCENTILE
@@ -473,9 +476,6 @@ class ColorChartState:
         self.xpl_alpha: State[Optional[float]] = State(None)
         self.pol_lambda_alpha: State[Optional[float]] = State(None)
         self.inc_alpha: State[Optional[float]] = State(None)
-        # Derived from optical_parameters.thickness by
-        # make_retardation_color_chart, which writes them back here. The video
-        # tab shows them, but the thickness is what the user types.
         self.xpl_max_retardation: State[float] = State(300)
         self.pol_lambda_max_retardation: State[Optional[float]] = State(1500.0)
         self.inc_max_retardation: State[Optional[float]] = State(300 + 530)
@@ -503,9 +503,6 @@ class ComputationResultState:
         self.mask: State[Optional[D2BoolArray]] = State(None)
         self.resolution_width: State[int] = State(1000)
         self.full_wave_plate_nm: State[float] = State(530.0)
-        # Gray-world white balance of every frame read from the videos, applied
-        # by run_all.load_data. Fixed for the run once "start" is pressed, so
-        # the video tab only lets it be set before that.
         self.apply_white_balance: State[bool] = State(False)
         self.white_balance_gains: State[Optional[tuple[float, float, float]]] = State(None)
         self.circ_threshold: State[float] = State(0.5)
@@ -523,6 +520,7 @@ class ComputationResultState:
         self.center_int_x: State[Optional[int]] = State(None)
         self.center_int_y: State[Optional[int]] = State(None)
         self.rotation_img: State[Optional[MonoColorPicture]] = State(None)
+        self.rotation_img_with_mark: State[Optional[Figure]] = State(None)
         self.image_rotation_direction: State[Optional[Literal['clockwise', 'counterclockwise']]] = State(None)
         self.reta_image_rotation_direction: State[Optional[Literal['clockwise', 'counterclockwise']]] = State(None)
         self.grain_list: State[Optional[list[Grain]]] = State(None)
@@ -624,3 +622,5 @@ def as_ComputationResult(param: ComputationResultState) -> ComputationResult:
             raise ValueError("unexpected type occurred in ComputationResultState")
 
     return ComputationResult(**res_dict)
+
+

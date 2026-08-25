@@ -1,3 +1,4 @@
+from niconavi_app.app_config import CPO_NORMALIZE_PERCENTILE
 from niconavi_app.state import State
 from niconavi_app.niconavi.image.type import Color, RGBPicture, MonoColorPicture, D1RGB_Array
 from typing import TypedDict, Optional, Literal, cast, Any
@@ -191,6 +192,14 @@ class LogView:
         ] = State([])
 
 
+# Placeholder text of the analysis "Information" panels. A panel showing its
+# placeholder has no statistics to report yet, and stays hidden until the plot
+# that owns it writes real values over the placeholder.
+CIP_STATS_DEFAULT = "Press calculate to compute CPO."
+HISTOGRAM_STATS_DEFAULT = "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
+ROSE_STATS_DEFAULT = "Mean orientation: -\nCircular variance: -"
+
+
 class AnalysisTab:
     def __init__(self) -> None:
         self.computation_unit: State[Literal["pixel", "grain"]] = State("grain")
@@ -229,12 +238,25 @@ class AnalysisTab:
         self.cip_color_mode: State[Literal["discrete", "continuous"]] = State("discrete")
         self.cip_display_points: State[bool] = State(False)
         self.cip_points_noise_size_percent: State[float] = State(0.5)
-        self.histogram_stats_text: State[str] = State(
-            "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
-        )
-        self.rose_stats_text: State[str] = State(
-            "Mean orientation: -\nCircular variance: -"
-        )
+        # CPO 90 deg normalize (default on): rescale the selected grains'
+        # inclination so their P95 maps to 90 deg (see cpo_normalization).
+        self.cip_normalize_90: State[bool] = State(True)
+        # Which percentile of the selected grains' inclination is rescaled to
+        # 90 deg. Editable next to the checkbox; CPO_NORMALIZE_PERCENTILE is
+        # the value the field starts at, and the user edits it per run.
+        # See make_cip_normalize_percentile_input.
+        self.cip_normalize_percentile: State[float] = State(CPO_NORMALIZE_PERCENTILE)
+        # Info panel text for the CPO plot, set when "calculate" is pressed:
+        # which grains were used, the M/b/alpha fit, and (when normalize is on)
+        # the predicted thickness. Non-interactive - not tied to grain toggles.
+        self.cip_stats_text: State[str] = State(CIP_STATS_DEFAULT)
+        # Grain-center RGB regression figures, set on calculate: one per image
+        # button, before and after the color correction. When present (and the
+        # plot option is CPO), each gets a button under "color check".
+        self.cip_regression_before_figure: State[Optional[Figure]] = State(None)
+        self.cip_regression_after_figure: State[Optional[Figure]] = State(None)
+        self.histogram_stats_text: State[str] = State(HISTOGRAM_STATS_DEFAULT)
+        self.rose_stats_text: State[str] = State(ROSE_STATS_DEFAULT)
 
 
 class GrainTab:
@@ -258,6 +280,16 @@ class MapTab:
         self.segmentation_done: State[bool] = State(False)
         self.fill_boundary_started: State[bool] = State(False)
         self.boundary_registered: State[bool] = State(False)
+        # images-panel buttons the user is prompted to check (shown red until
+        # clicked once). Holds the grain-tab button indices already
+        # acknowledged; cleared on recalculate / reset all so the prompt
+        # returns. See make_check_prompt_button.
+        self.acknowledged_prompt_buttons: State[frozenset[int]] = State(frozenset())
+
+
+class FunctionTab:
+    def __init__(self) -> None:
+        self.figure: State[Optional[Figure]] = State(None)
 
 
 class UI:
@@ -269,6 +301,7 @@ class UI:
         self.movie_tab = MovieTabObj()
         self.grain_tab = GrainTab()
         self.map_tab = MapTab()
+        self.function_tab = FunctionTab()
         self.log_view = LogView()
         self.image_viewer = ImageViewer()
         self.force_update_image_view = State(0)

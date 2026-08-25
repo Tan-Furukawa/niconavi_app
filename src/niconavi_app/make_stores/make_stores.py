@@ -297,7 +297,18 @@ def main() -> None:
     with open(package_dir / "niconavi" / "type.py", "r", encoding="utf-8") as f:
         source_code = f.read()
 
-    auto_msg = "\n#!------------------------------------------------------\n#! This code is automatically generated.\n#! このコードは自動生成されています。手動で編集をしないでください。\n#!------------------------------------------------------\n\n"
+    # Naming the two sources here rather than only forbidding edits: stores.py
+    # had drifted from both of them, because "do not edit" does not say where
+    # to put the change instead.
+    auto_msg = (
+        "\n#!------------------------------------------------------\n"
+        "#! This code is automatically generated.\n"
+        "#! このコードは自動生成されています。手動で編集をしないでください。\n"
+        "#! UI stores -> make_stores/template.py\n"
+        "#! ComputationResultState -> niconavi/type.py\n"
+        "#! いずれかを編集して make_stores.py を実行し直すこと。\n"
+        "#!------------------------------------------------------\n\n"
+    )
 
     generated_code = generate_code_b(source_code, template_code)
 
