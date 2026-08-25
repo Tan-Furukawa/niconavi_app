@@ -661,6 +661,7 @@ def make_scatter_log_y_checkbox(stores: Stores) -> CustomReactiveCheckbox:
 def make_cip_theme_input(stores: Stores) -> ReactiveCustomDropDown:
     d = ReactiveCustomDropDown(
         hint_text="jet",
+        value=stores.ui.analysis_tab.cip_theme.get(),
         options=[
             ft.dropdown.Option("jet"),
             ft.dropdown.Option("gray_r"),
@@ -671,6 +672,21 @@ def make_cip_theme_input(stores: Stores) -> ReactiveCustomDropDown:
         on_change=lambda e: stores.ui.analysis_tab.cip_theme.set(e.control.value),
     )
     d.width = 100
+    d.content_padding = 5
+    return d
+
+
+def make_cip_color_mode_input(stores: Stores) -> ReactiveCustomDropDown:
+    d = ReactiveCustomDropDown(
+        hint_text="discrete",
+        value=stores.ui.analysis_tab.cip_color_mode.get(),
+        options=[
+            ft.dropdown.Option("discrete"),
+            ft.dropdown.Option("continuous"),
+        ],
+        on_change=lambda e: stores.ui.analysis_tab.cip_color_mode.set(e.control.value),
+    )
+    d.width = 120
     d.content_padding = 5
     return d
 
@@ -810,6 +826,7 @@ class AnalysisTab(ft.Container):
         cip_start_button = make_cip_start_button(stores, page, logger=logger)
         cip_bandwidth = make_cip_bandwidth_input(stores)
         cip_theme = make_cip_theme_input(stores)
+        cip_color_mode = make_cip_color_mode_input(stores)
         cip_display_points = make_cip_display_points_input(stores)
         scatter_regression = make_scatter_regression_checkbox(stores)
         scatter_origin = make_scatter_origin_checkbox(stores)
@@ -1009,6 +1026,12 @@ class AnalysisTab(ft.Container):
                             [
                                 CustomText("Color theme:"),
                                 cip_theme,
+                            ]
+                        ),
+                        ft.Row(
+                            [
+                                CustomText("Color mode:"),
+                                cip_color_mode,
                             ]
                         ),
                         cip_display_points,

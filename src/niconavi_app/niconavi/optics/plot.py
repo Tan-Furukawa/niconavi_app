@@ -374,6 +374,7 @@ def plot_as_stereo_projection(
     sigma: int = 6,
     cmap: str = "jet",
     levels: int = 10,
+    color_mode: Literal["discrete", "continuous"] = "discrete",
     density_method: Literal["projected_gaussian", "spherical_kde"] = "projected_gaussian",
     spherical_bandwidth_deg: float = 5.0,
 ) -> tuple[Figure, Axes, Colorbar]:
@@ -395,6 +396,9 @@ def plot_as_stereo_projection(
         等高線のカラーマップ。
     levels : int, default 10
         等高線数。
+    color_mode : {"discrete", "continuous"}, default "discrete"
+        "discrete" は従来通り contourf の段階色で描画する。
+        "continuous" は密度ラスタを連続カラーマップで描画する。
     density_method : {"projected_gaussian", "spherical_kde"}, default "projected_gaussian"
         "projected_gaussian" は投影後の2-Dヒストグラムをガウシアン平滑化する。
         "spherical_kde" は球面上の角距離でvon Mises-Fisher型KDEを計算する。
@@ -456,8 +460,31 @@ def plot_as_stereo_projection(
 
     # --- 描画 --------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(6, 6))
-    cf = ax.contourf(X, Y, density, levels=levels, cmap=cmap)
-    cbar = fig.colorbar(cf, label=density_label)
+    cmap_for_density = plt.get_cmap(cmap).copy()
+    cmap_for_density.set_bad((0.0, 0.0, 0.0, 0.0))
+    if color_mode == "discrete":
+        density_artist = ax.contourf(X, Y, density, levels=levels, cmap=cmap_for_density)
+    elif color_mode == "continuous":
+        density_artist = ax.imshow(
+            density,
+            extent=(-1.0, 1.0, -1.0, 1.0),
+            origin="lower",
+            cmap=cmap_for_density,
+            interpolation="bilinear",
+        )
+        if levels > 0:
+            ax.contour(
+                X,
+                Y,
+                density,
+                levels=levels,
+                colors="black",
+                linewidths=0.35,
+                alpha=0.35,
+            )
+    else:
+        raise ValueError(f"Unknown color_mode: {color_mode}")
+    cbar = fig.colorbar(density_artist, label=density_label)
 
     if plot_points:
         r_points = np.tan(inclination_reflected / 2)
