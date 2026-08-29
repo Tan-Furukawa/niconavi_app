@@ -259,7 +259,7 @@ def restore_map_tab_state(stores: Stores, ui_state: dict[str, Any]) -> None:
         stores.ui.map_tab.shock_filter_iterator.set(None)
 
     stores.ui.map_tab.cleaning_count.set(int(map_state.get("cleaning_count", 0)))
-    stores.ui.map_tab.segmentation_angle.set(int(map_state.get("segmentation_angle", 10)))
+    stores.ui.map_tab.segmentation_angle.set(int(map_state.get("segmentation_angle", 5)))
     stores.ui.map_tab.fill_boundary_count.set(
         float(map_state.get("fill_boundary_count", 0.0))
     )

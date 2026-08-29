@@ -94,7 +94,7 @@ def reset_angle_map_workflow(stores: Stores) -> None:
     stores.ui.map_tab.shock_filter_iterator.set(create_shock_filter_iterator(angle_map_info))
     stores.ui.map_tab.cleaning_count.set(0)
     stores.ui.map_tab.fill_boundary_count.set(0.0)
-    stores.ui.map_tab.segmentation_angle.set(10)
+    stores.ui.map_tab.segmentation_angle.set(5)
     stores.ui.map_tab.segmentation_done.set(False)
     stores.ui.map_tab.fill_boundary_started.set(False)
     stores.ui.map_tab.boundary_registered.set(False)

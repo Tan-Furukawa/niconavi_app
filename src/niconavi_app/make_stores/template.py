@@ -275,7 +275,7 @@ class MapTab:
         self.angle_map_display: State[Optional[RGBPicture]] = State(None)
         self.shock_filter_iterator: State[Optional[Any]] = State(None)
         self.cleaning_count: State[int] = State(0)
-        self.segmentation_angle: State[int] = State(10)
+        self.segmentation_angle: State[int] = State(5)
         self.fill_boundary_count: State[float] = State(0.0)
         self.segmentation_done: State[bool] = State(False)
         self.fill_boundary_started: State[bool] = State(False)
