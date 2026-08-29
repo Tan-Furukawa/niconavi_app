@@ -44,3 +44,8 @@ where = ["src"]
 [tool.setuptools.package-data]
 "niconavi_app" = ["assets/*.png", "assets/icons/*.png"]
 "niconavi_app.niconavi" = ["package_data/*.npy"]
+
+[tool.uv]
+# Pin resolution to the dependency set the app was verified against; bump this
+# date deliberately when you want to move to newer releases.
+exclude-newer = "2025-12-10T00:00:00Z"
