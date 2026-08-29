@@ -92,6 +92,59 @@ def make_elevated_button(
     return button
 
 
+def make_check_prompt_button(
+    stores: Stores,
+    button_name: str,
+    tab_selection_state: State[int],
+    selected_index: int,  # 選択されているタブのindex
+    button_index: int,  # ボタンの固有index
+    additional_condition: list[State] = [],
+    additional_formula: Callable[[], bool] = lambda: True,
+) -> ReactiveElevatedButtonInSelector:
+    """Like make_elevated_button, but the button is shown red until the user
+    clicks it once ("check prompt"): it nudges the user to open and confirm a
+    map (e.g. extinction color, original color change). The acknowledged set
+    lives in stores.ui.map_tab.acknowledged_prompt_buttons and is cleared on
+    recalculate / reset all, so the red prompt returns after a recompute."""
+
+    acknowledged = stores.ui.map_tab.acknowledged_prompt_buttons
+
+    def click_button() -> None:
+        stores.ui.display_common_image_view.set(False)  # 次の行よりこっちが先!
+        if button_index not in acknowledged.get():
+            acknowledged.set(acknowledged.get() | {button_index})
+        tab_selection_state.set(button_index)
+
+    visibility = ReactiveState(
+        lambda: all(list(map(lambda x: x.get() is not None, additional_condition)))
+        and additional_formula()
+        and stores.ui.selected_index.get() == selected_index,
+        additional_condition + [stores.ui.selected_index],
+    )
+
+    normal_color = make_image_button_color(
+        stores, selected_index, button_index, tab_selection_state
+    )
+
+    bgcolor = ReactiveState(
+        lambda: (
+            ft.Colors.RED_700
+            if button_index not in acknowledged.get()
+            else normal_color.get()
+        ),
+        [acknowledged, normal_color],
+    )
+
+    button = ReactiveElevatedButtonInSelector(
+        button_name,
+        visible=visibility,
+        bgcolor=bgcolor,
+        on_click=lambda e: click_button(),
+    )
+
+    return button
+
+
 # タブの種類に関係なくボタンを表示したい場合はこれを使用する
 def make_always_display_elevated_button(
     stores: Stores,
@@ -159,6 +212,7 @@ def exist_in_raw_maps(
         "inclination",
         "cv_extinction_angle",
         "inclination_0_to_180",
+        "add_image",
     ],
 ) -> bool:
     raw_map = stores.computation_result.raw_maps.get()
@@ -166,7 +220,9 @@ def exist_in_raw_maps(
     # print(raw_map)
     # print("------------------------------------")
     if raw_map is not None:
-        if raw_map[key] is not None:
+        # .get(): projects saved before a key existed (e.g. add_image) simply
+        # lack it, so index access would KeyError. Missing == not present.
+        if raw_map.get(key) is not None:
             return True
         else:
             return False

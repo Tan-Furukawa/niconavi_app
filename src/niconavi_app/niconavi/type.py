@@ -1,5 +1,5 @@
 # %%
-from typing import TypedDict, Literal, Optional, TypeAlias, TypeGuard
+from typing import TypedDict, Literal, Optional, TypeAlias, TypeGuard, NotRequired
 from matplotlib.pyplot import Figure, Axes
 from niconavi_app.niconavi.tools.type import (
     D2BoolArray,
@@ -98,6 +98,10 @@ class RawMaps(TypedDict):  # make_AcceptedLiteral
     inclination: Optional[D2FloatArray]
     inclination_0_to_180: Optional[D2FloatArray]
     azimuth360: Optional[D2FloatArray]
+    # Addition image (相加画像): per-pixel composite of the phi_ex +/- 45 deg
+    # XPL+lambda color maps, selecting the frame the azimuth convention treats
+    # as "c-axis on the lambda slow axis". None when p45/m45 maps are absent.
+    add_image: Optional[RGBPicture]
     # tilt_direction_estimation_result: Optional[TiltDirectionEstimationResult]
 
 
@@ -328,6 +332,10 @@ class TiltImageResult(TypedDict):
     focused_index: D2IntArray
     image_mask: D2BoolArray
     azimuth_thin_section: float
+    # Signed RGB color change from tilting: original(tilt) - original(before
+    # tilt), gray-centered for display (clip((after/255 - before/255)*3 + 0.5,
+    # 0, 1) * 255). Absent on results built before this field existed.
+    color_change: NotRequired[RGBPicture]
     # original_retardation: D2FloatArray
     # tilted_retardation: D2FloatArray
 
@@ -402,6 +410,9 @@ class ColorChart:
         xpl_alpha: Optional[float] = None,
         pol_lambda_alpha: Optional[float] = None,
         inc_alpha: Optional[float] = None,
+        # Derived, not entered: make_retardation_color_chart recomputes both
+        # from the thickness and writes them back. Kept as fields so projects
+        # saved when they were inputs still load.
         xpl_max_retardation: float = 300,
         pol_lambda_max_retardation: Optional[float] = 1500.0,
         inc_max_retardation: Optional[float] = 300 + 530,
@@ -445,6 +456,12 @@ class ComputationResult:
         mask: Optional[D2BoolArray] = None,
         resolution_width: int = 1000,
         full_wave_plate_nm: float = 530.0,
+        # Gray-world white balance of every frame read from the videos,
+        # applied by run_all.load_data. Fixed for the run once "start" is
+        # pressed, so the video tab only lets it be set before that; the gains
+        # that were used are recorded beside it.
+        apply_white_balance: bool = False,
+        white_balance_gains: Optional[tuple[float, float, float]] = None,
         circ_threshold: float = 0.5,
         angle_between_x_and_thin_section_axis_at_tilt: float = 45,
         use_raw_in_grain_boundary_detection: bool = False,
@@ -461,7 +478,7 @@ class ComputationResult:
         center_int_x: Optional[int] = None,
         center_int_y: Optional[int] = None,
         rotation_img: Optional[MonoColorPicture] = None,
-        # rotation_img_with_mark: Optional[Figure] = None,
+        rotation_img_with_mark: Optional[Figure] = None,
         image_rotation_direction: Optional[
             Literal["clockwise", "counterclockwise"]
         ] = None,
@@ -524,6 +541,8 @@ class ComputationResult:
         self.resolution_width = resolution_width
         self.circ_threshold = circ_threshold
         self.full_wave_plate_nm = full_wave_plate_nm
+        self.apply_white_balance = apply_white_balance
+        self.white_balance_gains = white_balance_gains
         self.angle_between_x_and_thin_section_axis_at_tilt = (
             angle_between_x_and_thin_section_axis_at_tilt
         )
@@ -539,6 +558,7 @@ class ComputationResult:
         self.center_int_x = center_int_x
         self.center_int_y = center_int_y
         self.rotation_img = rotation_img
+        self.rotation_img_with_mark = rotation_img_with_mark
         self.reta_image_rotation_direction = reta_image_rotation_direction
         self.image_rotation_direction = image_rotation_direction
         self.grain_list = grain_list
@@ -681,14 +701,10 @@ GrainAcceptedLiteral = Literal[
     "sd_extinction_angle",
     "p45_color",
     "m45_color",
-    "R",
     "max_retardation_estimated_for_inclination",
     "min_retardation",
     "pR",
     "mR",
-    "R70",
-    "R80",
-    "R90",
     "pR75",
     "mR75",
     "azimuth",
@@ -716,14 +732,10 @@ GrainNumLiteral = Literal[
     "inclination",
     "extinction_angle",
     "sd_extinction_angle",
-    "R",
     "max_retardation_estimated_for_inclination",
     "min_retardation",
     "pR",
     "mR",
-    "R70",
-    "R80",
-    "R90",
     "pR75",
     "mR75",
     "azimuth",

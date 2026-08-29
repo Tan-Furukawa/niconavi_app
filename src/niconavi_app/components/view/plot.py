@@ -29,9 +29,20 @@ from copy import deepcopy
 from niconavi_app.tools.no_image import get_no_image
 from niconavi_app.components.view.spatial_units import apply_micrometer_axis
 from logging import getLogger
+from niconavi_app.components.common_component import (
+    MAP_TAB_STAGE,
+    FILTER_TAB_STAGE,
+    ANALYSIS_TAB_STAGE,
+)
 
 
 logger = getLogger("niconavi").getChild(__name__)
+
+
+# Tabs whose images are derived from the maps, where the square image's corners
+# fall outside the stage circle. Nothing measured out there means anything, so
+# the corners are painted out rather than shown carrying values.
+MAP_DERIVED_TABS = frozenset({MAP_TAB_STAGE, FILTER_TAB_STAGE, ANALYSIS_TAB_STAGE})
 
 
 # matplotlib.use("Agg")  # 非対話型バックエンドに切り替え
@@ -106,7 +117,7 @@ def imshow_with_grain_mask(
             vmax,
             cmap_at_2d,
         )
-        if stores.ui.selected_index.get() == 2:
+        if stores.ui.selected_index.get() in MAP_DERIVED_TABS:
             masked = apply_color_to_mask(
                 masked,
                 circ_mask,
@@ -510,6 +521,7 @@ def plot_polar_distribution(
             plot_points=stores.ui.analysis_tab.cip_display_points.get(),
             levels=stores.ui.analysis_tab.cip_contour.get(),
             cmap=stores.ui.analysis_tab.cip_theme.get(),
+            color_mode=stores.ui.analysis_tab.cip_color_mode.get(),
         )
         stores.ui.displayed_fig.set(deepcopy(fig))
         set_default_figure_style(fig, ax, method="polar plot")

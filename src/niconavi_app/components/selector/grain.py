@@ -1,6 +1,7 @@
 from niconavi_app.stores import Stores
 from niconavi_app.components.selector.tools import (
     make_elevated_button,
+    make_check_prompt_button,
     exist_in_raw_maps,
     ReactiveElevatedButtonInSelector,
 )
@@ -98,7 +99,7 @@ def make_grain_classification_button_visible_state(
         lambda: stores.ui.map_tab.angle_map_display.get() is not None,
     )
 
-    extinction_color = make_elevated_button(
+    extinction_color = make_check_prompt_button(
         stores,
         "extinction color",
         stores.ui.selected_button_at_grain_tab,
@@ -125,14 +126,10 @@ def make_grain_classification_button_visible_state(
     #     [stores.computation_result.grain_map_with_boundary],
     # )
 
-    retardation = make_elevated_button(
-        stores,
-        "R",
-        stores.ui.selected_button_at_grain_tab,
-        selected_index,
-        9,
-        [stores.computation_result.raw_maps],
-    )
+    # "R" (idx 9), "φex+45°" (idx 12) and "φex-45°" (idx 13) buttons were
+    # retired (see move_v3.md); the additive image supersedes them. They are
+    # not created at all - a created-but-unplaced reactive button would crash
+    # on selected_index change (update() on a control not added to the page).
 
     p45_R_color_map = make_elevated_button(
         stores,
@@ -152,26 +149,6 @@ def make_grain_classification_button_visible_state(
         11,
         [stores.computation_result.raw_maps],
         lambda: exist_in_raw_maps(stores, "m45_R_color_map"),
-    )
-
-    p45_R_map = make_elevated_button(
-        stores,
-        "φex+45°",
-        stores.ui.selected_button_at_grain_tab,
-        selected_index,
-        12,
-        [stores.computation_result.raw_maps],
-        lambda: exist_in_raw_maps(stores, "p45_R_map"),
-    )
-
-    m45_R_map = make_elevated_button(
-        stores,
-        "φex-45°",
-        stores.ui.selected_button_at_grain_tab,
-        selected_index,
-        13,
-        [stores.computation_result.raw_maps],
-        lambda: exist_in_raw_maps(stores, "m45_R_map"),
     )
 
     azimuth = make_elevated_button(
@@ -246,6 +223,37 @@ def make_grain_classification_button_visible_state(
         lambda: stores.computation_result.mask.get() is not None,
     )
 
+    add_image = make_elevated_button(
+        stores,
+        "additive image",
+        stores.ui.selected_button_at_grain_tab,
+        selected_index,
+        22,
+        [stores.computation_result.raw_maps],
+        lambda: exist_in_raw_maps(stores, "add_image"),
+    )
+
+    color_change0 = make_check_prompt_button(
+        stores,
+        "original color change (0°)",
+        stores.ui.selected_button_at_grain_tab,
+        selected_index,
+        23,
+        [stores.computation_result.tilt_image_info.tilt_image0],
+        lambda: stores.computation_result.tilt_image_info.tilt_image0.get() is not None,
+    )
+
+    color_change45 = make_check_prompt_button(
+        stores,
+        "original color change (45°)",
+        stores.ui.selected_button_at_grain_tab,
+        selected_index,
+        24,
+        [stores.computation_result.tilt_image_info.tilt_image45],
+        lambda: stores.computation_result.tilt_image_info.tilt_image45.get()
+        is not None,
+    )
+
 
     return (
         degree_0,
@@ -255,21 +263,21 @@ def make_grain_classification_button_visible_state(
         angle_map,
         R_color,
         extinction_color,
-        retardation,
         extinction_angle,
         grain_map,
         # grain_map_with_boundary,
         p45_R_color_map,
         m45_R_color_map,
-        p45_R_map,
-        m45_R_map,
         azimuth,
         tilt0,
         tilt45,
         horiz0,
         horiz45,
         # quality,
-        mask
+        mask,
+        add_image,
+        color_change0,
+        color_change45,
         # delta_R_tilt_0,
         # delta_R_tilt_45,
     )

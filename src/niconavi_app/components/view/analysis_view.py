@@ -1,14 +1,22 @@
 from typing import Optional
 from logging import getLogger
 
-from niconavi_app.stores import Stores, as_ComputationResult
+from niconavi_app.stores import (
+    Stores,
+    as_ComputationResult,
+    HISTOGRAM_STATS_DEFAULT,
+    ROSE_STATS_DEFAULT,
+)
 from matplotlib.pyplot import Figure, Axes
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 from niconavi_app.niconavi.image.image import apply_color_to_mask, create_outside_circle_mask
+from niconavi_app.niconavi.grain_analysis import reconstruct_grain_mask
 from niconavi_app.niconavi.analysis import (
+    GrainStatisticMethod,
     make_grain_mask,
-    scatter_for_all_minerals,
+    make_params_for_grain_statistics,
+    scatter_for_all_minerals_from_two_params,
     histogram_for_all_minerals,
     rose_diagram_for_all_minerals,
     filter_displayed_grain_classification_result,
@@ -38,6 +46,11 @@ from niconavi_app.niconavi.statistics.array_to_float import circular_variance
 HISTOGRAM_STATS_DEFAULT = "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
 ROSE_STATS_DEFAULT = "Mean orientation: -\nCircular variance: -"
 logger = getLogger("niconavi").getChild(__name__)
+
+
+def _grain_is_inside_circle_for_display(grain: dict, outside_circle_mask: np.ndarray) -> bool:
+    grain_mask = reconstruct_grain_mask(grain)  # type: ignore[arg-type]
+    return bool(np.any(grain_mask & ~outside_circle_mask) and not np.any(grain_mask & outside_circle_mask))
 
 
 def _format_metric_line(
@@ -199,12 +212,12 @@ def _update_rose_stats(
     stores: Stores,
     target: str,
     method: str,
+    params: ComputationResult,
 ) -> None:
     if method != "grain":
         stores.ui.analysis_tab.rose_stats_text.set(ROSE_STATS_DEFAULT)
         return
 
-    params = as_ComputationResult(stores.computation_result)
     classification = params.grain_classification_result
     if classification is None:
         stores.ui.analysis_tab.rose_stats_text.set(ROSE_STATS_DEFAULT)
@@ -252,6 +265,13 @@ def _update_rose_stats(
     stores.ui.analysis_tab.rose_stats_text.set(f"{mean_line}\n{variance_line}")
 
 
+def _prepare_grain_statistics_params(
+    params: ComputationResult,
+    target_methods: dict[str, GrainStatisticMethod],
+) -> ComputationResult:
+    return make_params_for_grain_statistics(params, target_methods)
+
+
 # matplotlib.use("Agg")  # 非対話型バックエンドに切り替え
 # matplotlib.use("svg")  # 非対話型バックエンドに切り替え
 
@@ -266,8 +286,12 @@ def at_analysis_tab(stores: Stores) -> Figure:
             stores.ui.analysis_tab.computation_unit.get(),
         )
         t1 = stores.ui.analysis_tab.grain_rose_diagram_target.get()
-        fig, ax = rose_diagram_for_all_minerals(
+        params_for_plot = _prepare_grain_statistics_params(
             params,
+            {t1: stores.ui.analysis_tab.rose_stat_method.get()},
+        )
+        fig, ax = rose_diagram_for_all_minerals(
+            params_for_plot,
             t1,
             t1,  # raw_mapsには、shape_orientaion(angle_deg)がないので、これを選択しても表示されない
             stores.ui.analysis_tab.computation_unit.get(),
@@ -278,6 +302,7 @@ def at_analysis_tab(stores: Stores) -> Figure:
             stores,
             t1,
             stores.ui.analysis_tab.computation_unit.get(),
+            params_for_plot,
         )
         stores.ui.displayed_fig.set(deepcopy(fig))
         set_default_figure_style(fig, method="rose diagram")
@@ -287,8 +312,12 @@ def at_analysis_tab(stores: Stores) -> Figure:
         t1 = stores.ui.analysis_tab.grain_histogram_target.get()
         # hist_bins = max(1, stores.ui.analysis_tab.histogram_bins.get() or 1)
 
+        params_for_plot = _prepare_grain_statistics_params(
+            params,
+            {t1: stores.ui.analysis_tab.histogram_stat_method.get()},
+        )
         params_scaled, unit_map = convert_grain_units_for_targets(
-            stores, params, {t1}
+            stores, params_for_plot, {t1}
         )
         fig, ax = histogram_for_all_minerals(
             params_scaled,
@@ -319,14 +348,26 @@ def at_analysis_tab(stores: Stores) -> Figure:
         # if stores.ui.analysis_tab.computation_unit == "grain":
         t1 = stores.ui.analysis_tab.scatter_target_x.get()
         t2 = stores.ui.analysis_tab.scatter_target_y.get()
-        params_scaled, unit_map = convert_grain_units_for_targets(
-            stores, params, {t1, t2}
+        params_x_for_plot = _prepare_grain_statistics_params(
+            params,
+            {t1: stores.ui.analysis_tab.scatter_x_stat_method.get()},
         )
-        x_label = format_quantity_label(to_grain_display(t1), unit_map.get(t1))
-        y_label = format_quantity_label(to_grain_display(t2), unit_map.get(t2))
-        fig, ax = scatter_for_all_minerals(
-            params_scaled,
+        params_y_for_plot = _prepare_grain_statistics_params(
+            params,
+            {t2: stores.ui.analysis_tab.scatter_y_stat_method.get()},
+        )
+        params_x_scaled, unit_map_x = convert_grain_units_for_targets(
+            stores, params_x_for_plot, {t1}
+        )
+        params_y_scaled, unit_map_y = convert_grain_units_for_targets(
+            stores, params_y_for_plot, {t2}
+        )
+        x_label = format_quantity_label(to_grain_display(t1), unit_map_x.get(t1))
+        y_label = format_quantity_label(to_grain_display(t2), unit_map_y.get(t2))
+        fig, ax = scatter_for_all_minerals_from_two_params(
+            params_x_scaled,
             t1,
+            params_y_scaled,
             t2,
             xlab=x_label,
             ylab=y_label,
@@ -349,6 +390,7 @@ def at_analysis_tab(stores: Stores) -> Figure:
         )
         if grain_map is not None and grain_classification_result is not None:
             grain_mask = make_grain_mask(grain_classification_result, grain_map)
+            outside_circle_mask = create_outside_circle_mask(grain_map)
         else:
             return get_no_image()
         segmented_map = stores.computation_result.grain_segmented_maps.get()
@@ -363,7 +405,7 @@ def at_analysis_tab(stores: Stores) -> Figure:
                     0,
                     180,
                     "SPO",
-                    mask=grain_mask,
+                    mask=grain_mask | outside_circle_mask,
                 )
             elif stores.ui.selected_button_at_analysis_tab.get() == 1:
                 fig, ax = rose_diagram_for_all_minerals(
@@ -393,12 +435,15 @@ def at_analysis_tab(stores: Stores) -> Figure:
                 plot_area = raw_map["extinction_angle"].shape
                 height, width = plot_area
                 fig, ax = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
+                ax.imshow(np.zeros((height, width, 3), dtype=np.uint8))
                 plotted = False
 
                 for mineral, info in filtered.items():
                     color = info["color"]
                     for grain in grain_list:
                         if grain.get("mineral") != mineral:
+                            continue
+                        if not _grain_is_inside_circle_for_display(grain, outside_circle_mask):
                             continue
                         if not all(grain.get(key) is not None for key in required_keys):
                             continue
@@ -449,12 +494,15 @@ def at_analysis_tab(stores: Stores) -> Figure:
                 plot_area = raw_map["extinction_angle"].shape
                 height, width = plot_area
                 fig, ax = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
+                ax.imshow(np.zeros((height, width, 3), dtype=np.uint8))
                 plotted = False
 
                 for mineral, info in filtered.items():
                     color = info["color"]
                     for grain in grain_list:
                         if grain.get("mineral") != mineral:
+                            continue
+                        if not _grain_is_inside_circle_for_display(grain, outside_circle_mask):
                             continue
                         if not all(grain.get(key) is not None for key in required_keys):
                             continue
@@ -492,6 +540,16 @@ def at_analysis_tab(stores: Stores) -> Figure:
         return get_no_image()
 
     elif stores.ui.analysis_tab.plot_option.get() == "CPO":
+        # The RGB regression figures ("color check" buttons, indices 17 and 18)
+        # are stored figures independent of the maps.
+        if stores.ui.selected_button_at_analysis_tab.get() == 17:
+            before_figure = stores.ui.analysis_tab.cip_regression_before_figure.get()
+            return before_figure if before_figure is not None else get_no_image()
+
+        if stores.ui.selected_button_at_analysis_tab.get() == 18:
+            after_figure = stores.ui.analysis_tab.cip_regression_after_figure.get()
+            return after_figure if after_figure is not None else get_no_image()
+
         raw_map = stores.computation_result.raw_maps.get()
         grain_map = stores.computation_result.grain_map.get()
         grain_classification_result = (
@@ -504,23 +562,16 @@ def at_analysis_tab(stores: Stores) -> Figure:
 
         if raw_map is not None:
 
-            if (
-                stores.computation_result.tilt_image_info.tilt_image0.get() is not None
-                and stores.computation_result.tilt_image_info.tilt_image0.get()
-                is not None
-            ):
-                mask0 = stores.computation_result.tilt_image_info.tilt_image0.get()
-                mask45 = stores.computation_result.tilt_image_info.tilt_image45.get()
-
-                if mask0 is not None and mask45 is not None:
-                    mask = ~(mask0["image_mask"] & mask45["image_mask"])
-                elif mask0 is not None and mask45 is None:
-                    mask = ~(mask0["image_mask"])
-                    mask = ~create_outside_circle_mask(raw_map["extinction_angle"])
-                else:
-                    mask = ~create_outside_circle_mask(raw_map["extinction_angle"])
+            tilt0 = stores.computation_result.tilt_image_info.tilt_image0.get()
+            tilt45 = stores.computation_result.tilt_image_info.tilt_image45.get()
+            if tilt0 is not None and tilt45 is not None:
+                # image_mask marks where the tilt image has data, and `mask` is
+                # what gets painted over, so hide where either tilt has none.
+                mask = ~(tilt0["image_mask"] & tilt45["image_mask"])
             else:
-                mask = ~create_outside_circle_mask(raw_map["extinction_angle"])
+                # Without both tilts there is no per-pixel validity to go on;
+                # fall back to hiding what sits outside the stage circle.
+                mask = create_outside_circle_mask(raw_map["extinction_angle"])
 
             if stores.ui.selected_button_at_analysis_tab.get() == 0:
                 return plot_float_map(

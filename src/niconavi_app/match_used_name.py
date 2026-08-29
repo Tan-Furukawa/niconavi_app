@@ -19,7 +19,6 @@ RoseDiagramDisplayInPixel = ["extinction angle", "azimuth"]
 
 RawMapsNumListUsedInPlot = [
     "extinction_angle",
-    "max_retardation_map",
     "p45_R_map",
     "m45_R_map",
     "azimuth",
@@ -28,7 +27,6 @@ RawMapsNumListUsedInPlot = [
 
 RawMapsNumListDisplayInPlot = [
     "extinction angle (Φ)",
-    "retardation",
     "XPL+λ Φ+45",
     "XPL+λ Φ-45",
     "azimuth",
@@ -36,19 +34,14 @@ RawMapsNumListDisplayInPlot = [
 
 
 GrainNumListUsedInPlot = [
-    "size", # mu**2/px**2
-    "perimeter", # mu/px
-    "inscribed_radius", # mu/px
-    "equivalent_radius", # mu/px
     "extinction_angle",
-    # "sd_extinction_angle",
-    "R",
-    # "min_retardation",
     "azimuth",
     "inclination",
-    # "sd_azimuth",
     "V",
-    # "S",
+    "size", # mu**2/px**2
+    "equivalent_radius", # mu/px
+    "inscribed_radius", # mu/px
+    "perimeter", # mu/px
     "eccentricity",
     "angle_deg",
     "major_axis_length", # mu/px
@@ -56,19 +49,14 @@ GrainNumListUsedInPlot = [
 ]
 
 GrainNumListDisplayInPlot = [
-    "size", # mu**2/px**2
-    "perimeter", # mu/px
-    "inscribed radius", # mu/px
-    "area-equivalent radius", # mu/px
     "extinction angle",
-    # "cv(extinction_angle)",
-    "retardation",
-    # "min retardation",
     "azimuth",
     "inclination",
-    # "cv(azimuth)",
     "brightness",
-    # "Color (Saturation)",
+    "area", # mu**2/px**2
+    "equivalent area disc diameter", # mu/px
+    "Diameter of the maximum inscribed disc", # mu/px
+    "perimeter", # mu/px
     "eccentricity",
     "shape preferred orientation",
     "ellipse major axis length", # mu/px
@@ -86,9 +74,18 @@ GRAIN_MEASUREMENT_DIMENSION_MAP: dict[str, GrainMeasurementDimension] = {
     "minor_axis_length": "length",
 }
 
+GRAIN_DISPLAY_VALUE_MULTIPLIER_MAP: dict[str, float] = {
+    "inscribed_radius": 2.0,
+    "equivalent_radius": 2.0,
+}
+
 
 def get_grain_measurement_dimension(name: str) -> Optional[GrainMeasurementDimension]:
     return GRAIN_MEASUREMENT_DIMENSION_MAP.get(name)
+
+
+def get_grain_display_value_multiplier(name: str) -> float:
+    return GRAIN_DISPLAY_VALUE_MULTIPLIER_MAP.get(name, 1.0)
 
 
 def convert_A_to_B(

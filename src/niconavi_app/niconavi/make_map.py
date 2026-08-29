@@ -15,6 +15,12 @@ from typing import (
     TypeVar,
     Callable,
 )
+from niconavi_app.app_config import (
+    ADDITION_BRANCH_SOURCE,
+    R_COLOR_MAP_SOURCE,
+    RColorMapSource,
+)
+from niconavi_app.niconavi.addition_branch import solve_branch_maps
 from niconavi_app.niconavi.image.image import resize_img, create_outside_circle_mask
 from niconavi_app.niconavi.image.tools import apply_color_map, apply_2dcolor_map
 import numpy as np
@@ -348,6 +354,17 @@ def closest_element_indices(vec: D1FloatArray, mat: D2FloatArray) -> D2IntArray:
     return cast(D2IntArray, indices)
 
 
+def closest_periodic_element_indices(
+    vec: D1FloatArray,
+    mat: D2FloatArray,
+    *,
+    period: float = 360.0,
+) -> D2IntArray:
+    diff = np.abs((mat[..., np.newaxis] - vec + period / 2) % period - period / 2)
+    indices = np.argmin(diff, axis=-1)
+    return cast(D2IntArray, indices)
+
+
 def choose_pixel_of_indices_matrix(
     pics: list[RGBPicture], indices_mat: D2IntArray
 ) -> RGBPicture:
@@ -364,12 +381,18 @@ def choose_pixel_of_indices_matrix(
     return cast(RGBPicture, img)
 
 
+def brightest_pixel_indices(pics: list[RGBPicture]) -> D2IntArray:
+    gray_pics = [cv2.cvtColor(pic, cv2.COLOR_RGB2GRAY) for pic in pics]
+    return cast(D2IntArray, np.argmax(np.array(gray_pics, dtype=np.uint8), axis=0))
+
+
 def make_color_maps(
     pics: list[RGBPicture],
     angles: D1FloatArray,
     s_pics: Optional[list[RGBPicture]] = None,
     s_angles: Optional[D1FloatArray] = None,
     progress_callback: Callable[[float | None], None] = lambda p: None,
+    r_color_map_source: RColorMapSource = R_COLOR_MAP_SOURCE,
 ) -> RawMaps:
 
     degree_0 = pics[np.argmin(np.abs(angles - 0.0))]
@@ -411,12 +434,26 @@ def make_color_maps(
         90,
     )
 
-    # under cross polarized light
-    max_retardation_index = closest_element_indices(
-        angles, D2FloatArray(extinction_angle + 45)
-    )
-
-    min_retardation_index = closest_element_indices(angles, extinction_angle)
+    if r_color_map_source == "brightest_angle":
+        max_retardation_index = brightest_pixel_indices(pics)
+        max_retardation_angle = D2FloatArray(angles[max_retardation_index])
+        min_retardation_index = closest_periodic_element_indices(
+            angles,
+            D2FloatArray(max_retardation_angle + 45),
+        )
+    elif r_color_map_source in ("extinction_angle", "extinction_color_map"):
+        min_retardation_index = closest_periodic_element_indices(
+            angles,
+            D2FloatArray(extinction_angle),
+            period=90,
+        )
+        max_retardation_index = closest_periodic_element_indices(
+            angles,
+            D2FloatArray(extinction_angle + 45),
+            period=90,
+        )
+    else:
+        raise ValueError(f"Unknown R color map source: {r_color_map_source}")
 
     R_color_map = choose_pixel_of_indices_matrix(pics, max_retardation_index)
 
@@ -550,7 +587,20 @@ def make_R_maps(
     full_wave_plate: float = 530,
     max_R: Optional[float] = None,
     min_R: Optional[float] = None,
+    thickness_mm: Optional[float] = None,
+    no: float = 1.544,
+    ne: float = 1.553,
 ) -> RawMaps:
+    """The +/-45 deg retardation maps, the azimuth they fix and the addition
+    image that follows from them.
+
+    With a thickness (and ADDITION_BRANCH_SOURCE left at "theta_lut") the two
+    lambda-plate frames are matched against the Theta LUT the addition-image
+    inclination fit uses - see addition_branch - so the branch decision and the
+    inclination share one color model, one alpha convention and one candidate
+    set. Without a thickness there is no Theta -> retardation relation to build
+    that LUT from, so the pol_lambda retardation chart is read instead.
+    """
 
     R_color_map = raw_maps["R_color_map"]
     extinction_angle = raw_maps["extinction_angle"]
@@ -570,25 +620,43 @@ def make_R_maps(
         return {
             **raw_maps,
             "max_retardation_map": R_map,
+            "add_image": None,
         }
     else:
-        p45_R_map, _, _ = make_retardation_color_map(
-            p45_R_color_map,
-            pol_lambda_color_chart,
-            pol_lambda_R_array,
-            progress_callback,
-            maxR=max_R,  # 検板が挿入済みのとき
-            minR=min_R,  # 検板が挿入済みのとき
-        )
+        if ADDITION_BRANCH_SOURCE not in ("retardation_chart", "theta_lut"):
+            raise ValueError(
+                f"Unknown ADDITION_BRANCH_SOURCE: {ADDITION_BRANCH_SOURCE}"
+            )
+        if ADDITION_BRANCH_SOURCE == "theta_lut" and thickness_mm is not None:
+            branch = solve_branch_maps(
+                p45_R_color_map,
+                m45_R_color_map,
+                thickness_mm=float(thickness_mm),
+                no=no,
+                ne=ne,
+                lambda_plate_retardation_nm=full_wave_plate,
+                mask=~create_outside_circle_mask(np.asarray(p45_R_color_map)),
+            )
+            p45_R_map = branch.p45_retardation_nm
+            m45_R_map = branch.m45_retardation_nm
+        else:
+            p45_R_map, _, _ = make_retardation_color_map(
+                p45_R_color_map,
+                pol_lambda_color_chart,
+                pol_lambda_R_array,
+                progress_callback,
+                maxR=max_R,  # 検板が挿入済みのとき
+                minR=min_R,  # 検板が挿入済みのとき
+            )
 
-        m45_R_map, _, _ = make_retardation_color_map(
-            m45_R_color_map,
-            pol_lambda_color_chart,
-            pol_lambda_R_array,
-            progress_callback,
-            maxR=max_R,
-            minR=min_R,
-        )
+            m45_R_map, _, _ = make_retardation_color_map(
+                m45_R_color_map,
+                pol_lambda_color_chart,
+                pol_lambda_R_array,
+                progress_callback,
+                maxR=max_R,
+                minR=min_R,
+            )
 
         # R_map_plus = R_map + full_wave_plate
         # R_map_minus = np.abs(full_wave_plate - R_map)
@@ -642,12 +710,23 @@ def make_R_maps(
         azimuth[p_larger_than_m] = 180 - extinction_angle[p_larger_than_m]
         azimuth[~p_larger_than_m] = 90 - extinction_angle[~p_larger_than_m]
 
+        # Addition image (相加画像): pick, per pixel, the phi_ex +/- 45 deg
+        # XPL+lambda color frame with the larger retardation - the same
+        # p45_R_map >= m45_R_map rule the azimuth convention uses, i.e. the
+        # frame that places the (length-slow) c-axis on the lambda slow axis.
+        add_image = np.where(
+            p_larger_than_m[..., None],
+            np.asarray(p45_R_color_map),
+            np.asarray(m45_R_color_map),
+        ).astype(np.uint8)
+
         return {
             **raw_maps,
             "max_retardation_map": R_map,
             "m45_R_map": m45_R_map,
             "p45_R_map": p45_R_map,
             "azimuth": azimuth,
+            "add_image": RGBPicture(add_image),
         }
 
 

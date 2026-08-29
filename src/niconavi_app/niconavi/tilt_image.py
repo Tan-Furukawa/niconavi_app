@@ -1,6 +1,7 @@
 # %%
 import matplotlib.pyplot as plt
 from typing import cast, Callable, Optional, TypeVar, TypedDict
+from niconavi_app.app_config import ENABLE_TILT_REF_MEDIAN_CORRECTION
 from niconavi_app.niconavi.image.image import (
     rotate_array,
     resize_img,
@@ -17,6 +18,7 @@ from niconavi_app.niconavi.tools.type import (
     D2IntArray,
     D2FloatArray,
     D2BoolArray,
+    D3FloatArray,
 )
 from niconavi_app.niconavi.type import ComputationResult, TiltImageResult, OpticalParameters, RawMaps
 from niconavi_app.niconavi.optics.uniaxial_plate import (
@@ -41,10 +43,25 @@ class ColorChartInfosOfTiltedImage(TypedDict):
     minus_tilted: ColorChartInfo
 
 
+def compute_sharpness_stack(images: list[RGBPicture]) -> D3FloatArray:
+    """
+    各フレームの局所シャープネス (|Laplacian|) マップを (N, H, W) のfloat32配列として返す。
+    argmaxの結果はCV_64FでもCV_32Fでも変わらないため、より軽量なCV_32Fで計算する。
+    """
+    if len(images) == 0:
+        raise ValueError("画像リストが空です。")
+
+    measures = []
+    for img in images:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        measures.append(np.abs(cv2.Laplacian(gray, cv2.CV_32F)))
+
+    return cast(D3FloatArray, np.stack(measures, axis=0))
+
+
 def get_focus_index(images: list[RGBPicture]) -> D2IntArray:
     """
-    複数の画像から、各ピクセルごとにもっともピントの合った部分を抜き出し、
-    1枚の合成画像 (result) と、各ピクセルにおける採用画像のインデックスマップ (selected_idx_map) を返す。
+    複数の画像から、各ピクセルごとにもっともピントの合った画像のインデックスマップを返す。
 
     Parameters
     ----------
@@ -54,31 +71,11 @@ def get_focus_index(images: list[RGBPicture]) -> D2IntArray:
 
     Returns
     -------
-    result : np.ndarray
-        焦点合成された画像（BGR, 3チャンネル）
     selected_idx_map : np.ndarray
         2次元配列 (height, width)。各ピクセルで採用された画像のインデックスが格納される。
     """
-
-    if len(images) == 0:
-        raise ValueError("画像リストが空です。")
-
-    # 各画像をグレースケール化 -> Laplacianでシャープネスを測る
-    measure_stack = []
-    for img in images:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        lap = cv2.Laplacian(gray, cv2.CV_64F)
-        measure = np.abs(lap)
-        measure_stack.append(measure)
-
-    # (N, H, W)の3次元配列にスタック
-    measure_stack = np.stack(measure_stack, axis=0)
-
-    # 各ピクセルにおいて最大シャープネスを示す画像のインデックスを取得
-    # max_idx.shape => (height, width)
-    selected_idx_map = np.argmax(measure_stack, axis=0).astype(np.uint8)
-
-    return selected_idx_map
+    sharpness_stack = compute_sharpness_stack(images)
+    return cast(D2IntArray, np.argmax(sharpness_stack, axis=0).astype(np.uint8))
 
 
 def ransac_plane_fitting_2d(
@@ -123,7 +120,11 @@ def ransac_plane_fitting_2d(
         「平面を最も登る方向」ベクトルが x–y 平面となす角 (ラジアン)
     """
 
-    np.random.seed(random_state)
+    # np.random.choice(..., replace=False) を使う旧実装はプールサイズ全体の
+    # permutationを毎回生成するため200回のループで大半の時間を消費していた。
+    # Generator.choice はFloydのアルゴリズムでこれを避けられるため大幅に高速。
+    # また、グローバルなnp.random状態を書き換える副作用も無くなる。
+    rng = np.random.default_rng(random_state)
 
     H, W = image.shape
     # 座標を用意 (x, y)
@@ -148,7 +149,7 @@ def ransac_plane_fitting_2d(
     # --- RANSAC のメインループ ---
     for _ in range(max_iterations):
         # ランダムに3点サンプリング
-        sample_indices = np.random.choice(N_full, size=3, replace=False)
+        sample_indices = rng.choice(N_full, size=3, replace=False)
         X_sample = X_all[sample_indices]  # (3,3)
         Z_sample = Z_all[sample_indices]  # (3,)
 
@@ -305,26 +306,39 @@ def linear_transform_image(
 
 def focus_stack(
     img_list: list[RGBPicture],
+    index_denoise_ksize: int = 5,
 ) -> tuple[RGBPicture, D2IntArray, float, float]:
 
     div_n = len(img_list)
     if len(img_list) > 255:
         raise ValueError("length of img_stack should less than 255")
-    index_mat = get_focus_index(img_list)
+
+    sharpness_stack = compute_sharpness_stack(img_list)
+    index_mat = cast(D2IntArray, np.argmax(sharpness_stack, axis=0).astype(np.uint8))
+
+    # 傾いた焦点面の向き(azimuth/tilt角)を推定するためだけにRANSACで
+    # ロバストな平面をフィットする。試料面はテクスチャの少ない領域では
+    # per-pixel argmaxがノイズに弱いため、フィット自体は大きくスムージング
+    # ＆ダウンサンプルした index_mat で行う。
     _index_mat = resize_img(cast(MonoColorPicture, index_mat.astype(np.uint8)), 1000)
     _index_mat = median_filter(_index_mat, 21)
     _index_mat = resize_img(_index_mat, 200)
 
-    _img, angle_with_x, angle_with_xy = ransac_plane_fitting_2d(
+    _, angle_with_x, angle_with_xy = ransac_plane_fitting_2d(
         cast(D2FloatArray, _index_mat.astype(np.float64))
     )
 
-    _img = np.clip(_img, 0, div_n)  # type: ignore
-    _img = cast(MonoColorPicture, _img.astype(np.uint8))  # type: ignore
-    _img = resize_img(_img, height=index_mat.shape[0], width=index_mat.shape[1])  # type: ignore
-    index = cast(D2IntArray, _img.astype(np.int32))
-    # plt.imshow(index)
-    # plt.show()
+    # 合成に使うインデックスは、上のRANSAC平面(3パラメータのみの理想平面)を
+    # そのまま採用しない。試料面はわずかな凹凸や研磨面の傾きムラで完全な
+    # 平面からずれるため、全画素を理想平面へ押し込めると画像全体が
+    # ぼやける(粒界の境界が甘くなる)。一方、生のper-pixel argmaxは粒界は
+    # シャープだがテクスチャの少ない粒内でノイズが乗る。
+    # 小さいカーネルのメディアンフィルタで、粒界のシャープさを保ったまま
+    # そのノイズだけを取り除く。
+    index = cast(
+        D2IntArray, median_filter(index_mat, index_denoise_ksize).astype(np.int32)
+    )
+
     stacked_img = display_indexed_image(img_list, index)
 
     return (
@@ -422,7 +436,14 @@ def align_image_by_phase_correlation(
     # 3. 位相相関を用いて平行移動量 (dx, dy) を推定
     #    phaseCorrelate(ref, target) は
     #    「target をどれだけずらせば ref と重なるか」の (dx, dy) を返す。
-    (dx, dy), _ = cv2.phaseCorrelate(f1, f2)  # type: ignore
+    #    窓関数(Hanning窓)を与えずに呼ぶと、画像端(warpAffineによる黒縁など)の
+    #    不連続がFFTに漏れ込み、粒子模様のような周期的テクスチャがあると
+    #    間違ったピークに位置合わせしてしまうことがある(実際、あるサンプルの
+    #    0°タイルト画像で、窓なしだと応答値0.01程度の誤ったシフトを返し、
+    #    結晶が水平画像に対して右にずれる不具合が発生した。Hanning窓を渡すと
+    #    応答値が0.75程度まで上がり、正しいシフトを検出できることを確認済み)。
+    win = cv2.createHanningWindow((f1.shape[1], f1.shape[0]), cv2.CV_32F)
+    (dx, dy), _ = cv2.phaseCorrelate(f1, f2, win)  # type: ignore
 
     # 4. 平行移動量 (dx, dy) を用いて、img2 をアフィン変換 (warpAffine) で平行移動
     #    M は以下の通り:
@@ -657,15 +678,35 @@ def estimate_tilted_image(
 
     # tilted_retardation = resize_array(tilt, w_original, h_original)
 
+    original_image = resize_img(rim, w_original, h_original)
+    focused_tilted_image = resize_img(mod_tilt_img, w_original, h_original)
+
     return TiltImageResult(
-        original_image=resize_img(rim, w_original, h_original),
-        focused_tilted_image=resize_img(mod_tilt_img, w_original, h_original),
+        original_image=original_image,
+        focused_tilted_image=focused_tilted_image,
         focused_index=r_focused_index,
         image_mask=(r_mask == 1),
         azimuth_thin_section=azimuth_thin_section,
+        color_change=make_tilt_color_change_image(
+            before=original_image, after=focused_tilted_image
+        ),
         # original_retardation=r_original_retardation,
         # tilted_retardation=tilted_retardation,
     )
+
+
+def make_tilt_color_change_image(
+    before: RGBPicture, after: RGBPicture
+) -> RGBPicture:
+    """Gray-centered, signed RGB color change from tilting: original(tilt) -
+    original(before tilt). Matches the ebsd_adjustment_v3 "original color
+    change" panel display, clip((after/255 - before/255)*3 + 0.5, 0, 1),
+    scaled back to 0..255 uint8. The x3 gain makes the small tilt-induced
+    change visible; 0.5 puts "no change" at neutral gray."""
+    before_unit = np.asarray(before, dtype=np.float64) / 255.0
+    after_unit = np.asarray(after, dtype=np.float64) / 255.0
+    delta = np.clip((after_unit - before_unit) * 3.0 + 0.5, 0.0, 1.0)
+    return RGBPicture((delta * 255.0).astype(np.uint8))
 
 
 def normalize_by_gray_scale(
@@ -673,6 +714,9 @@ def normalize_by_gray_scale(
     target_img: RGBPicture,
     mask: Optional[D2BoolArray] = None,
 ) -> RGBPicture:
+    if not ENABLE_TILT_REF_MEDIAN_CORRECTION:
+        return RGBPicture(np.asarray(target_img, dtype=np.uint8))
+
     im1 = standard_img
     im2 = target_img
     im1_hsv = cv2.cvtColor(im1, cv2.COLOR_RGB2HSV).astype(np.float64)

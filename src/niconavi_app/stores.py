@@ -2,8 +2,12 @@
 #!------------------------------------------------------
 #! This code is automatically generated.
 #! このコードは自動生成されています。手動で編集をしないでください。
+#! UI stores -> make_stores/template.py
+#! ComputationResultState -> niconavi/type.py
+#! いずれかを編集して make_stores.py を実行し直すこと。
 #!------------------------------------------------------
 
+from niconavi_app.app_config import CPO_NORMALIZE_PERCENTILE
 from niconavi_app.state import State
 from niconavi_app.niconavi.image.type import Color, RGBPicture, MonoColorPicture, D1RGB_Array
 from typing import TypedDict, Optional, Literal, cast, Any
@@ -197,6 +201,14 @@ class LogView:
         ] = State([])
 
 
+# Placeholder text of the analysis "Information" panels. A panel showing its
+# placeholder has no statistics to report yet, and stays hidden until the plot
+# that owns it writes real values over the placeholder.
+CIP_STATS_DEFAULT = "Press calculate to compute CPO."
+HISTOGRAM_STATS_DEFAULT = "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
+ROSE_STATS_DEFAULT = "Mean orientation: -\nCircular variance: -"
+
+
 class AnalysisTab:
     def __init__(self) -> None:
         self.computation_unit: State[Literal["pixel", "grain"]] = State("grain")
@@ -211,11 +223,11 @@ class AnalysisTab:
         # self.map_rose_diagram_target: State[Literal["azimuth", "extinction_angle"]] = (
         #     State("extinction_angle")
         # )
-        self.grain_histogram_target: State[GrainNumLiteral] = State("R")
+        self.grain_histogram_target: State[GrainNumLiteral] = State("size")
         # self.map_histogram_target: State[RawMapsNumLiteral] = State(
         #     "max_retardation_map"
         # )
-        self.scatter_target_x: State[GrainNumLiteral] = State("R")
+        self.scatter_target_x: State[GrainNumLiteral] = State("size")
         self.scatter_target_y: State[GrainNumLiteral] = State("extinction_angle")
         self.scatter_show_regression: State[bool] = State(True)
         self.scatter_regression_origin: State[bool] = State(True)
@@ -225,17 +237,35 @@ class AnalysisTab:
         self.histogram_alpha: State[float] = State(0.5)
         self.rose_alpha: State[float] = State(0.5)
         self.rose_flip: State[bool] = State(True)
+        self.rose_stat_method: State[Literal["median", "mean"]] = State("median")
+        self.histogram_stat_method: State[Literal["median", "mean"]] = State("median")
+        self.scatter_x_stat_method: State[Literal["median", "mean"]] = State("median")
+        self.scatter_y_stat_method: State[Literal["median", "mean"]] = State("median")
         self.cip_bandwidth: State[float] = State(6.)
         self.cip_contour: State[int] = State(10)
         self.cip_theme: State[str] = State("jet")
+        self.cip_color_mode: State[Literal["discrete", "continuous"]] = State("discrete")
         self.cip_display_points: State[bool] = State(False)
         self.cip_points_noise_size_percent: State[float] = State(0.5)
-        self.histogram_stats_text: State[str] = State(
-            "Mean: -\nStd Dev: -\nMin: -\nMax: -\n95th percentile: -\nMode: -\nCount: -\nIntegral ratio: -\nCount ratio: -"
-        )
-        self.rose_stats_text: State[str] = State(
-            "Mean orientation: -\nCircular variance: -"
-        )
+        # CPO 90 deg normalize (default on): rescale the selected grains'
+        # inclination so their P95 maps to 90 deg (see cpo_normalization).
+        self.cip_normalize_90: State[bool] = State(True)
+        # Which percentile of the selected grains' inclination is rescaled to
+        # 90 deg. Editable next to the checkbox; CPO_NORMALIZE_PERCENTILE is
+        # the value the field starts at, and the user edits it per run.
+        # See make_cip_normalize_percentile_input.
+        self.cip_normalize_percentile: State[float] = State(CPO_NORMALIZE_PERCENTILE)
+        # Info panel text for the CPO plot, set when "calculate" is pressed:
+        # which grains were used, the M/b/alpha fit, and (when normalize is on)
+        # the predicted thickness. Non-interactive - not tied to grain toggles.
+        self.cip_stats_text: State[str] = State(CIP_STATS_DEFAULT)
+        # Grain-center RGB regression figures, set on calculate: one per image
+        # button, before and after the color correction. When present (and the
+        # plot option is CPO), each gets a button under "color check".
+        self.cip_regression_before_figure: State[Optional[Figure]] = State(None)
+        self.cip_regression_after_figure: State[Optional[Figure]] = State(None)
+        self.histogram_stats_text: State[str] = State(HISTOGRAM_STATS_DEFAULT)
+        self.rose_stats_text: State[str] = State(ROSE_STATS_DEFAULT)
 
 
 class GrainTab:
@@ -254,11 +284,21 @@ class MapTab:
         self.angle_map_display: State[Optional[RGBPicture]] = State(None)
         self.shock_filter_iterator: State[Optional[Any]] = State(None)
         self.cleaning_count: State[int] = State(0)
-        self.segmentation_angle: State[int] = State(10)
+        self.segmentation_angle: State[int] = State(5)
         self.fill_boundary_count: State[float] = State(0.0)
         self.segmentation_done: State[bool] = State(False)
         self.fill_boundary_started: State[bool] = State(False)
         self.boundary_registered: State[bool] = State(False)
+        # images-panel buttons the user is prompted to check (shown red until
+        # clicked once). Holds the grain-tab button indices already
+        # acknowledged; cleared on recalculate / reset all so the prompt
+        # returns. See make_check_prompt_button.
+        self.acknowledged_prompt_buttons: State[frozenset[int]] = State(frozenset())
+
+
+class FunctionTab:
+    def __init__(self) -> None:
+        self.figure: State[Optional[Figure]] = State(None)
 
 
 class UI:
@@ -270,6 +310,7 @@ class UI:
         self.movie_tab = MovieTabObj()
         self.grain_tab = GrainTab()
         self.map_tab = MapTab()
+        self.function_tab = FunctionTab()
         self.log_view = LogView()
         self.image_viewer = ImageViewer()
         self.force_update_image_view = State(0)
@@ -462,6 +503,8 @@ class ComputationResultState:
         self.mask: State[Optional[D2BoolArray]] = State(None)
         self.resolution_width: State[int] = State(1000)
         self.full_wave_plate_nm: State[float] = State(530.0)
+        self.apply_white_balance: State[bool] = State(False)
+        self.white_balance_gains: State[Optional[tuple[float, float, float]]] = State(None)
         self.circ_threshold: State[float] = State(0.5)
         self.angle_between_x_and_thin_section_axis_at_tilt: State[float] = State(45)
         self.use_raw_in_grain_boundary_detection: State[bool] = State(False)
@@ -477,6 +520,7 @@ class ComputationResultState:
         self.center_int_x: State[Optional[int]] = State(None)
         self.center_int_y: State[Optional[int]] = State(None)
         self.rotation_img: State[Optional[MonoColorPicture]] = State(None)
+        self.rotation_img_with_mark: State[Optional[Figure]] = State(None)
         self.image_rotation_direction: State[Optional[Literal['clockwise', 'counterclockwise']]] = State(None)
         self.reta_image_rotation_direction: State[Optional[Literal['clockwise', 'counterclockwise']]] = State(None)
         self.grain_list: State[Optional[list[Grain]]] = State(None)
@@ -578,3 +622,5 @@ def as_ComputationResult(param: ComputationResultState) -> ComputationResult:
             raise ValueError("unexpected type occurred in ComputationResultState")
 
     return ComputationResult(**res_dict)
+
+

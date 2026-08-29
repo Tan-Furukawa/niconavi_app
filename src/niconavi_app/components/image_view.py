@@ -14,6 +14,7 @@ from niconavi_app.components.view.center_view import at_center_tab
 from niconavi_app.components.view.grain_view import at_grain_tab
 from niconavi_app.components.view.filter_view import at_filter_tab
 from niconavi_app.components.view.spatial_units import get_pixel_to_micrometer_scale
+from niconavi_app.components.page_tab.tabs.function_tab import at_function_tab
 from niconavi_app.tools.no_image import get_no_image
 from logging import getLogger
 
@@ -52,6 +53,9 @@ def which_tab_opened(stores: Stores) -> Figure:
         case 4:
             logger.debug("Rendering analysis tab image view.")
             return at_analysis_tab(stores)
+        case 5:
+            print("-----event at function tab-----")
+            return at_function_tab(stores)
         case _:
             logger.warning("No image view renderer for selected tab index %s.", stores.ui.selected_index.get())
             return get_no_image()
@@ -74,6 +78,9 @@ class ImageView(ft.Container):
             stores.ui.display_grain_boundary,
             stores.ui.analysis_tab.cip_bandwidth,
             stores.computation_result.first_image,
+            # The movie tab previews its frames white-balanced or not
+            # depending on this, so flipping it has to redraw the view.
+            stores.computation_result.apply_white_balance,
             stores.computation_result.rotation_img,
             stores.computation_result.center_int_x,
             stores.computation_result.center_int_y,
@@ -98,6 +105,10 @@ class ImageView(ft.Container):
             stores.ui.analysis_tab.histogram_alpha,
             stores.ui.analysis_tab.rose_alpha,
             stores.ui.analysis_tab.rose_flip,
+            stores.ui.analysis_tab.rose_stat_method,
+            stores.ui.analysis_tab.histogram_stat_method,
+            stores.ui.analysis_tab.scatter_x_stat_method,
+            stores.ui.analysis_tab.scatter_y_stat_method,
             stores.computation_result.tilt_image_info.tilt_image0,
             stores.computation_result.tilt_image_info.tilt_image45,
             stores.ui.analysis_tab.scatter_regression_origin,
@@ -105,11 +116,14 @@ class ImageView(ft.Container):
             stores.ui.analysis_tab.histogram_log_x,
             stores.ui.analysis_tab.scatter_log_x,
             stores.ui.analysis_tab.scatter_log_y,
+            stores.ui.analysis_tab.cip_regression_before_figure,
+            stores.ui.analysis_tab.cip_regression_after_figure,
             stores.ui.grain_tab.slider_contrast,
             stores.ui.grain_tab.slider_brightness,
             stores.ui.grain_tab.slider_median_kernel,
             stores.ui.grain_tab.brightness_correction,
             stores.ui.map_tab.angle_map_display,
+            stores.ui.function_tab.figure,
             stores.computation_result.plot_parameters.histogram_bins,
             stores.computation_result.plot_parameters.rose_diagram_bins,
             stores.computation_result.plot_parameters.rose_diagram180_bins,

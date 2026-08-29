@@ -42,7 +42,7 @@ def classify_button_click(
 
         update_progress_bar(None, stores)
         r = as_ComputationResult(stores.computation_result)
-        r = reset_onclick_classify_button(r)
+        r = reset_onclick_classify_button(r, stores)
         save_in_ComputationResultState(r, stores)
 
         r = po.add_random_colors_to_user_code(r)

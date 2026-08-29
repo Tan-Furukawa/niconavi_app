@@ -28,6 +28,8 @@ def make_cip_button_visible_state(
     ReactiveElevatedButton,
     ReactiveElevatedButton,
     ReactiveElevatedButton,
+    ReactiveElevatedButton,
+    ReactiveElevatedButton,
 ]:
 
     extinction_angle = make_elevated_button(
@@ -258,6 +260,36 @@ def make_cip_button_visible_state(
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
     )
 
+    # Grain-center RGB regression figures, produced by "calculate": one button
+    # per image. Shown only while CPO is selected and the figure exists (the
+    # figure being non-None is enforced by make_elevated_button's not-None
+    # condition list).
+    rgb_before = make_elevated_button(
+        stores,
+        "RGB before correction",
+        stores.ui.selected_button_at_analysis_tab,
+        selected_index,
+        17,
+        [
+            stores.ui.analysis_tab.cip_regression_before_figure,
+            stores.ui.analysis_tab.plot_option,
+        ],
+        lambda: stores.ui.analysis_tab.plot_option.get() == "CPO",
+    )
+
+    rgb_after = make_elevated_button(
+        stores,
+        "RGB after correction",
+        stores.ui.selected_button_at_analysis_tab,
+        selected_index,
+        18,
+        [
+            stores.ui.analysis_tab.cip_regression_after_figure,
+            stores.ui.analysis_tab.plot_option,
+        ],
+        lambda: stores.ui.analysis_tab.plot_option.get() == "CPO",
+    )
+
     return (
         extinction_angle,
         azimuth,
@@ -276,4 +308,6 @@ def make_cip_button_visible_state(
         polar90,
         polar180,
         polar360,
+        rgb_before,
+        rgb_after,
     )

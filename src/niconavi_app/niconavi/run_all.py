@@ -1,5 +1,6 @@
 # %%
 from typing import Callable, Literal, TypedDict, TypeGuard, TypeVar, overload
+from niconavi_app.app_config import R_COLOR_MAP_SOURCE, RColorMapSource
 from niconavi_app.niconavi.custom_error import (
     InvalidRotationDirection,
     RotatedAngleError,
@@ -12,6 +13,9 @@ from niconavi_app.niconavi.optics.uniaxial_plate import get_retardation_color_ch
 from niconavi_app.niconavi.optics.tools import normalize_axes
 from niconavi_app.niconavi.tilt_image import (
     estimate_tilted_image,
+)
+from niconavi_app.niconavi.tilt_registration import (
+    estimate_tilt_image_result_poc,
 )
 from copy import deepcopy
 import traceback
@@ -43,8 +47,19 @@ from niconavi_app.niconavi.image.image import (
     resize_image_list,
     create_outside_circle_mask,
 )
+from niconavi_app.niconavi.image.white_balance import (
+    GRAY_WORLD_CORRECTION_STRENGTH,
+    apply_rgb_gains,
+    apply_rgb_gains_to_frames,
+    blend_gains,
+    gray_world_mean_gains,
+)
 from niconavi_app.niconavi.image.type import Color, D1RGB_Array
-from niconavi_app.niconavi.make_map import make_color_maps, make_R_maps, make_retardation_color_map
+from niconavi_app.niconavi.make_map import (
+    make_color_maps,
+    make_R_maps,
+    make_retardation_color_map,
+)
 from niconavi_app.niconavi.optics.color import show_color
 from niconavi_app.niconavi.retardation_normalization import (
     select_h_in_color_chart,
@@ -103,6 +118,75 @@ def make_err_msg(params: ComputationResult, *keys: str) -> str:
 
 
 def load_data(
+    params: ComputationResult,
+    progress_callback: Callable[[float | None], None] = lambda p: None,
+) -> ComputationResult:
+    return white_balance_loaded_frames(
+        read_frames_from_videos(params, progress_callback)
+    )
+
+
+def white_balance_loaded_frames(params: ComputationResult) -> ComputationResult:
+    """Gray-world white balance every frame just read from the videos.
+
+    One RGB gain set is estimated from the first XPL frame and applied
+    unchanged to every other frame, so only the shared colour cast of the lamp
+    is removed and no relative colour or brightness comparison between frames
+    is disturbed. This is the same correction the inclination pipeline of
+    fix/ebsd_adjustment_v3 applies before it resolves the theta / 180 - theta
+    branch (lib.white_balance.apply_gray_world_white_balance); doing it here
+    instead means every downstream map is built from corrected frames rather
+    than the maps being corrected after the fact.
+
+    Off by default, so the scripts that drive this pipeline themselves (which
+    apply their own correction later) are unaffected.
+    """
+    if not params.apply_white_balance:
+        return params
+
+    reference_image = params.first_image.get("xpl")
+    if reference_image is None:
+        return params
+
+    gains = blend_gains(
+        gray_world_mean_gains(reference_image), GRAY_WORLD_CORRECTION_STRENGTH
+    )
+    print(f"Gray-world RGB gains: {gains} (strength={GRAY_WORLD_CORRECTION_STRENGTH})")
+
+    tilt_image_info = TiltImageInfo(
+        **{
+            **params.tilt_image_info.__dict__,
+            "image0_raw": apply_rgb_gains_to_frames(
+                params.tilt_image_info.image0_raw, gains
+            ),
+            "image45_raw": apply_rgb_gains_to_frames(
+                params.tilt_image_info.image45_raw, gains
+            ),
+            "tilt_image0_raw": apply_rgb_gains_to_frames(
+                params.tilt_image_info.tilt_image0_raw, gains
+            ),
+            "tilt_image45_raw": apply_rgb_gains_to_frames(
+                params.tilt_image_info.tilt_image45_raw, gains
+            ),
+        }
+    )
+
+    return ComputationResult(
+        **{
+            **params.__dict__,
+            "pics": apply_rgb_gains_to_frames(params.pics, gains),
+            "reta_pics": apply_rgb_gains_to_frames(params.reta_pics, gains),
+            "tilt_image_info": tilt_image_info,
+            "first_image": {
+                key: (None if image is None else apply_rgb_gains(image, gains))
+                for key, image in params.first_image.items()
+            },
+            "white_balance_gains": tuple(float(gain) for gain in gains),
+        }
+    )
+
+
+def read_frames_from_videos(
     params: ComputationResult,
     progress_callback: Callable[[float | None], None] = lambda p: None,
 ) -> ComputationResult:
@@ -246,86 +330,27 @@ def estimate_tilt_image_result(
     params: ComputationResult,
     progress_callback: Callable[[float | None], None] = lambda p: None,
 ) -> ComputationResult:
-
+    # Tilt-pair registration now uses phase-only correlation (POC) - a bounded
+    # POC coarse shift plus a fine aspect/shift Powell step - matching the
+    # ebsd_adjustment_v3 make_data.py pipeline. estimate_tilt_image_result_poc
+    # is a drop-in replacement building the same TiltImageResult contract
+    # (including the color_change field). See niconavi.tilt_registration.
     progress_callback(None)
 
-    alpha = params.color_chart.pol_lambda_alpha
-    im0 = params.tilt_image_info.image0_raw
-    im_tilt0 = params.tilt_image_info.tilt_image0_raw
-
-    im45 = params.tilt_image_info.image45_raw
-    im_tilt45 = params.tilt_image_info.tilt_image45_raw
-    angle_of_image45 = params.angle_between_x_and_thin_section_axis_at_tilt
-
-    theta_deg = params.tilt_image_info.theta_thin_section
-    center_x = params.center_int_x
-    center_y = params.center_int_y
-
-    if params.raw_maps is not None:
-        ex_angle_map = params.raw_maps["extinction_angle"]
-        shape = (ex_angle_map.shape[0], ex_angle_map.shape[1])
-        # im0とim_tilt0は必須
-        if (
-            alpha is not None
-            and im0 is not None
-            and im_tilt0 is not None
-            and center_x is not None
-            and center_y is not None
-            and params.raw_maps is not None
-        ):
-            center = (center_x, center_y)
-            im_result0 = estimate_tilted_image(
-                im0,
-                im_tilt0,
-                np.radians(theta_deg),
-                center=center,
-                shape=shape,
-            )
-
-            # ------------------------------
-            # 45°傾き画像が存在するとき
-            # ------------------------------
-            if im45 is not None and im_tilt45 is not None:
-                im_result45 = estimate_tilted_image(
-                    im45,
-                    im_tilt45,
-                    np.radians(theta_deg),
-                    center=center,
-                    shape=shape,
-                    rotation=-angle_of_image45,
-                )
-                return ComputationResult(
-                    **{
-                        **params.__dict__,
-                        "tilt_image_info": TiltImageInfo(
-                            **{
-                                **params.tilt_image_info.__dict__,
-                                "tilt_image0": im_result0,
-                                "tilt_image45": im_result45,
-                            }
-                        ),
-                    }
-                )
-            # ------------------------------
-            # 45°傾き画像が存在しないとき
-            # ------------------------------
-            else:
-                return ComputationResult(
-                    **{
-                        **params.__dict__,
-                        "tilt_image_info": TiltImageInfo(
-                            **{
-                                **params.tilt_image_info.__dict__,
-                                "tilt_image0": im_result0,
-                            }
-                        ),
-                    }
-                )
-        else:
-            return params
-
-    else:
+    if params.raw_maps is None:
         raise ValueError("params.raw_maps is None")
+
+    # The POC path does not need the lambda-plate alpha to register; it only
+    # needs the raw 0 deg reference/tilt frame lists and the image center.
+    if (
+        params.tilt_image_info.image0_raw is None
+        or params.tilt_image_info.tilt_image0_raw is None
+        or params.center_int_x is None
+        or params.center_int_y is None
+    ):
+        return params
+
+    return estimate_tilt_image_result_poc(params)
 
 
 def find_image_center(
@@ -681,6 +706,7 @@ def get_inclination(
 def make_raw_color_maps(
     params: ComputationResult,
     progress_callback: Callable[[float | None], None] = lambda p: None,
+    r_color_map_source: RColorMapSource = R_COLOR_MAP_SOURCE,
 ) -> ComputationResult:
     if is_not_None_type(params.pics_rotated) and is_not_None_type(params.angles):
         try:
@@ -693,6 +719,7 @@ def make_raw_color_maps(
                         params.reta_pics_rotated,
                         params.reta_angles,
                         progress_callback=progress_callback,
+                        r_color_map_source=r_color_map_source,
                     ),
                 }
             )
@@ -715,6 +742,11 @@ def make_raw_R_maps(
         and is_not_None_type(params.color_chart.xpl_retardation_color_chart)
     ):
         try:
+            max_retardation = get_max_retardation_from_thickness(
+                params.optical_parameters.thickness,
+                no=params.optical_parameters.no,
+                ne=params.optical_parameters.ne,
+            )
             return ComputationResult(
                 **{
                     **params.__dict__,
@@ -728,13 +760,14 @@ def make_raw_R_maps(
                         full_wave_plate=params.full_wave_plate_nm,
                         # 以下パラメータは、検板を含む光学系のRetardation評価のときのみ活躍する。
                         # 検板が挿入されたときの画像のRは、min{0,530 - R_xpl} < R R_xpl + 530nmまで検査する
-                        max_R=params.full_wave_plate_nm
-                        + params.color_chart.xpl_max_retardation,
-                        min_R=np.min(
-                            params.full_wave_plate_nm
-                            - params.color_chart.xpl_max_retardation,
-                            0,
-                        ),
+                        max_R=params.full_wave_plate_nm + max_retardation,
+                        min_R=params.full_wave_plate_nm - max_retardation,
+                        # Same thickness the LUT behind the addition/
+                        # subtraction branch is built from, so the bounds above
+                        # and the LUT describe one thin section.
+                        thickness_mm=params.optical_parameters.thickness,
+                        no=params.optical_parameters.no,
+                        ne=params.optical_parameters.ne,
                     ),
                 }
             )
@@ -929,7 +962,14 @@ def make_retardation_color_chart(
 
         # cross nicol
         # --------------------------------------------
-        xpl_end = params.color_chart.xpl_max_retardation
+        # The chart runs from 0 to the largest retardation this thin section
+        # can produce, which the thickness fixes. xpl_max_retardation is kept
+        # in sync as a derived value; it is no longer an input of its own.
+        xpl_end = get_max_retardation_from_thickness(
+            params.optical_parameters.thickness,
+            no=params.optical_parameters.no,
+            ne=params.optical_parameters.ne,
+        )
         chart_xpl = get_retardation_color_chart_with_nd_filter(
             start=0,
             end=xpl_end,
@@ -948,7 +988,7 @@ def make_retardation_color_chart(
         progress_callback(None)
         # cross nicol + full wave plate
         # --------------------------------------------
-        pol_lambda_end = params.color_chart.pol_lambda_max_retardation
+        pol_lambda_end = xpl_end + params.full_wave_plate_nm
         if (
             pol_lambda_end is not None
             and p45_color_map is not None
@@ -989,6 +1029,10 @@ def make_retardation_color_chart(
                 "color_chart": ColorChart(
                     **{
                         **params.color_chart.__dict__,
+                        "xpl_max_retardation": xpl_end,
+                        "pol_lambda_max_retardation": (
+                            pol_lambda_end if pol_lambda_R_array is not None else None
+                        ),
                         "xpl_retardation_color_chart": index_xpl["color_chart_1d"],
                         "xpl_R_array": chart_xpl["w"],
                         "xpl_alpha": index_xpl["best_h"],

@@ -29,6 +29,10 @@ from niconavi_app.components.common_component import (
     CustomReactiveText,
     CustomRadio,
     CustomReactiveCheckbox,
+    confirm_action,
+    confirm_discard_downstream,
+    describe_downstream_reset,
+    MAP_TAB_STAGE,
 )
 from niconavi_app.tools.tools import convert_RGBPicture_to_src_base64, switch_tab_index
 from niconavi_app.components.log_view import update_logs
@@ -59,6 +63,7 @@ import niconavi_app.niconavi.run_all as po
 from niconavi_app.niconavi.angle_map_boundary import (
     create_shock_filter_iterator,
     fill_dark_boundaries,
+    fill_dark_boundaries_by_elongation,
     grain_boundary_from_angle_labels,
     make_theta_phi_angle_info,
     make_theta_phi_legend_image,
@@ -88,7 +93,7 @@ def reset_angle_map_workflow(stores: Stores) -> None:
     stores.ui.map_tab.shock_filter_iterator.set(create_shock_filter_iterator(angle_map_info))
     stores.ui.map_tab.cleaning_count.set(0)
     stores.ui.map_tab.fill_boundary_count.set(0.0)
-    stores.ui.map_tab.segmentation_angle.set(10)
+    stores.ui.map_tab.segmentation_angle.set(5)
     stores.ui.map_tab.segmentation_done.set(False)
     stores.ui.map_tab.fill_boundary_started.set(False)
     stores.ui.map_tab.boundary_registered.set(False)
@@ -206,7 +211,7 @@ def continue_button_click(
 
         update_progress_bar(None, stores)
         r = as_ComputationResult(stores.computation_result)
-        r = reset_onclick_grain_analyze_button(r)
+        r = reset_onclick_grain_analyze_button(r, stores)
         save_in_ComputationResultState(r, stores)
 
         update_progress_bar(0.0, stores)
@@ -233,9 +238,9 @@ def execute_grain_boundary_calc_button_click(
 
         update_progress_bar(None, stores)
         r = as_ComputationResult(stores.computation_result)
-        r = reset_onclick_grain_boundary_button(r)
+        r = reset_onclick_grain_boundary_button(r, stores)
         r = po.make_grain_boundary(r)
-        # r = reset_onclick_grain_analyze_button(r)
+        # r = reset_onclick_grain_analyze_button(r, stores)
         save_in_ComputationResultState(r, stores)
         update_progress_bar(0.0, stores)
         update_logs(stores, ("Grain segmentation completed.", "ok"), logger=logger)
@@ -329,13 +334,14 @@ def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Lo
             update_progress_bar(0.0, stores)
             return
 
-        next_count = stores.ui.map_tab.fill_boundary_count.get() + 0.5
-        angle_map_info = fill_dark_boundaries(
+        # max_width starts at 2.0 px and increases by 0.5 px per click
+        # elongation_thresh = 1 / max_width  (ratio >= thresh ↔ avg width <= max_width)
+        prev = stores.ui.map_tab.fill_boundary_count.get()
+        next_count = 2.0 if prev == 0.0 else prev + 0.5
+        elongation_thresh = 1.0 / next_count
+        angle_map_info = fill_dark_boundaries_by_elongation(
             angle_map_info,
-            dark_l_thresh=15,
-            branch_width_thresh=next_count,
-            max_iterations=3,
-            fixed_skeleton_once=False,
+            elongation_thresh=elongation_thresh,
         )
         stores.ui.map_tab.angle_map_info.set(angle_map_info)
         stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
@@ -349,7 +355,7 @@ def fill_boundary_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Lo
             logger=logger,
         )
     except Exception:
-        update_logs(stores, ("Failed to fill dark boundaries.", "err"), logger=logger)
+        update_logs(stores, ("Failed to fill thin boundaries.", "err"), logger=logger)
         update_progress_bar(0.0, stores)
         logger.exception("Failed to fill dark boundaries.")
 
@@ -398,6 +404,19 @@ def reset_angle_map_button_click(
         update_logs(stores, ("Resetting angle map workflow...", "msg"), logger=logger)
         update_progress_bar(None, stores)
         reset_angle_map_workflow(stores)
+
+        # The angle map is what the grain boundary is cut from, so dropping it
+        # invalidates the grain analysis and everything the later tabs built on
+        # top: clear them too rather than leave them showing stale results.
+        r = as_ComputationResult(stores.computation_result)
+        r = reset_onclick_grain_boundary_button(r, stores)
+        save_in_ComputationResultState(r, stores)
+
+        reset_filter_tab(stores)
+        LabelingController(stores=stores).reset_application()
+        stores.ui.progress.set(MAP_TAB_STAGE)
+
+        update_logs(stores, ("Angle map reset.", "ok"))
         update_progress_bar(0.0, stores)
         update_logs(stores, ("Angle map workflow reset.", "ok"), logger=logger)
     except Exception:
@@ -593,6 +612,22 @@ class GrainTab(ft.Container):
             lambda: can_use_angle_map.get(),
             [can_use_angle_map],
         )
+
+        def handle_reset_angle_map(e: ft.ControlEvent) -> None:
+            # Reset throws away the cleaning and segmentation done on this tab,
+            # so it always asks - unlike the steps that only cost the tabs after
+            # them, there is something to lose even with no later tab open.
+            message = "This clears the cleaned angle map and the grain boundary registered from it."
+            downstream = describe_downstream_reset(stores, MAP_TAB_STAGE)
+            if downstream:
+                message = f"{message} {downstream}"
+            confirm_action(
+                page,
+                "Reset the angle map?",
+                message,
+                lambda: reset_angle_map_button_click(stores, e, logger=logger),
+            )
+
         angle_map_legend_visible = ReactiveState(
             lambda: stores.ui.selected_button_at_grain_tab.get() == 21
             and stores.ui.map_tab.angle_map_display.get() is not None,
@@ -666,7 +701,11 @@ class GrainTab(ft.Container):
                         ),
                         CustomReactiveText(
                             ReactiveState(
-                                lambda: f"{stores.ui.map_tab.fill_boundary_count.get():g}",
+                                lambda: (
+                                    f"{stores.ui.map_tab.fill_boundary_count.get():.1f} px"
+                                    if stores.ui.map_tab.fill_boundary_count.get() > 0.0
+                                    else ""
+                                ),
                                 [stores.ui.map_tab.fill_boundary_count],
                             ),
                             visible=has_angle_map_source,
@@ -683,9 +722,7 @@ class GrainTab(ft.Container):
                         ),
                         make_map_action_button(
                             "Reset",
-                            on_click=lambda e: reset_angle_map_button_click(
-                                stores, e, logger=logger
-                            ),
+                            on_click=lambda e: handle_reset_angle_map(e),
                             enabled=reset_enabled,
                         ),
                     ]
@@ -695,8 +732,12 @@ class GrainTab(ft.Container):
                     [
                         make_map_action_button(
                             "▶ Continue",
-                            on_click=lambda e: continue_button_click(
-                                stores, e, logger=logger
+                            on_click=lambda e: confirm_discard_downstream(
+                                page,
+                                stores,
+                                MAP_TAB_STAGE,
+                                "Rerun grain analysis",
+                                lambda: continue_button_click(stores, e, logger=logger),
                             ),
                             enabled=continue_enabled,
                         ),

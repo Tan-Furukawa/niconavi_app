@@ -317,22 +317,38 @@ def create_shock_filter_iterator(
     amount: float = 0.5,
     min_vividness_delta: float = 5.0,
     hue_delta_thresh_deg: float = 10.0,
-    preserve_black_l_thresh: float = 18.0,
-    black_source_l_thresh: float = 35.0,
+    preserve_black_v_thresh: float = 39.0,
+    black_source_v_thresh: float = 62.0,
     blurry_vividness_thresh: float = 60.0,
 ) -> Iterator[dict[str, Any]]:
+    """Flow a vivid neighbour into a blurred pixel, one iteration per next().
+
+    Every quantity ranked here is the HSV value V, in 0..255:
+
+        vividness  Q = V           blackness  K = 255 - V
+
+    _theta_phi_to_rgb builds this map fully saturated - S = 255 for every
+    pixel - so the score S * V / 255 that this used to compute was already
+    exactly V, and V is theta / 90 * 255, the inclination the map encodes.
+    Darkness used to be read from CIELAB L instead. L of a saturated color
+    depends on its hue, which made a single L threshold fire anywhere
+    between theta = 8 and 47 deg depending on the azimuth: a perceptual
+    property of the color coding decided a question about orientation. The
+    V thresholds below replace the L ones at the value each L threshold is
+    crossed at for the median hue, the choice that leaves the smallest
+    disagreement with the old behaviour (L <= 18 -> V <= 39 for
+    preserve_black, L <= 35 -> V <= 62 for black_source).
+    """
     filtered = _as_uint8_rgb(theta_phi_angle_info["theta_phi_angle_map"]).astype(np.float32)
     neighbor_offsets = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]
 
     while True:
         src_u8 = np.clip(filtered, 0, 255).astype(np.uint8)
         hsv = cv2.cvtColor(src_u8, cv2.COLOR_RGB2HSV).astype(np.float32)
-        lab = cv2.cvtColor(src_u8, cv2.COLOR_RGB2LAB).astype(np.float32)
         hue = hsv[:, :, 0] * 2.0
-        vividness = hsv[:, :, 1] * (hsv[:, :, 2] / 255.0)
-        l_value = lab[:, :, 0]
-        blackness = 255.0 - l_value
-        preserve_black = l_value <= preserve_black_l_thresh
+        vividness = hsv[:, :, 2]
+        blackness = 255.0 - vividness
+        preserve_black = vividness <= preserve_black_v_thresh
         best_score = vividness.copy()
         best_color = filtered.copy()
 
@@ -351,7 +367,7 @@ def create_shock_filter_iterator(
                 & (hue_diff <= hue_delta_thresh_deg)
             )
             can_black = (
-                (l_value[neighbor] <= black_source_l_thresh)
+                (vividness[neighbor] <= black_source_v_thresh)
                 & (vividness[target] <= blurry_vividness_thresh)
                 & (blackness[neighbor] > best_score[target])
             )
@@ -494,10 +510,18 @@ def fill_dark_boundaries(
     theta_phi_angle_info: dict[str, Any],
     *,
     branch_width_thresh: float,
-    dark_l_thresh: float = 15.0,
+    dark_v_thresh: float | None = 34.0,
     max_iterations: int = 3,
     fixed_skeleton_once: bool = False,
 ) -> dict[str, Any]:
+    """Remove thin dark branches from the merged superpixel labels.
+
+    A region counts as dark by its median HSV value V, in 0..255, for the
+    reason create_shock_filter_iterator gives: the map is fully saturated, so
+    V is the inclination it encodes, where CIELAB L also carries the hue. The
+    default replaces the old L <= 15 at the V that threshold is crossed at
+    for the median hue. None disables the darkness test entirely.
+    """
     from scipy import ndimage as ndi
     from skimage.morphology import skeletonize
 
@@ -510,25 +534,25 @@ def fill_dark_boundaries(
     )
     height, width = labels.shape
     removed_mask_total = np.zeros(labels.shape, dtype=bool)
-    lab_l = cv2.cvtColor(base_rgb, cv2.COLOR_RGB2LAB)[:, :, 0]
+    value_channel = cv2.cvtColor(base_rgb, cv2.COLOR_RGB2HSV)[:, :, 2]
 
-    def label_median_l(component_labels: np.ndarray) -> dict[int, float]:
+    def label_median_value(component_labels: np.ndarray) -> dict[int, float]:
         values = {}
         for label in np.unique(component_labels[component_labels >= 0]):
-            values[int(label)] = float(np.median(lab_l[component_labels == label]))
+            values[int(label)] = float(np.median(value_channel[component_labels == label]))
         return values
 
-    def thin_branch_mask(dark_mask: np.ndarray) -> np.ndarray:
-        skeleton = skeletonize(dark_mask)
+    def thin_branch_mask(region_mask: np.ndarray) -> np.ndarray:
+        skeleton = skeletonize(region_mask)
         if not np.any(skeleton):
-            return np.zeros_like(dark_mask, dtype=bool)
-        dist = cv2.distanceTransform(dark_mask.astype(np.uint8), cv2.DIST_L2, 3)
+            return np.zeros_like(region_mask, dtype=bool)
+        dist = cv2.distanceTransform(region_mask.astype(np.uint8), cv2.DIST_L2, 3)
         skeleton_width = 2.0 * dist
         thin_skeleton = skeleton & (skeleton_width <= float(branch_width_thresh))
         if not np.any(thin_skeleton):
-            return np.zeros_like(dark_mask, dtype=bool)
+            return np.zeros_like(region_mask, dtype=bool)
         n_branches, branch_labels = cv2.connectedComponents(thin_skeleton.astype(np.uint8), connectivity=8)
-        mask = np.zeros_like(dark_mask, dtype=bool)
+        mask = np.zeros_like(region_mask, dtype=bool)
         for branch_id in range(1, n_branches):
             branch = branch_labels == branch_id
             if not np.any(branch) or float(np.median(skeleton_width[branch])) > branch_width_thresh:
@@ -540,7 +564,7 @@ def fill_dark_boundaries(
                 yy, xx = np.ogrid[y_slice, x_slice]
                 mask[y_slice, x_slice] |= (yy - y) ** 2 + (xx - x) ** 2 <= radius ** 2
 
-        mask &= dark_mask
+        mask &= region_mask
         directional_width = np.zeros_like(dist)
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for y, x in zip(*np.nonzero(mask)):
@@ -550,7 +574,7 @@ def fill_dark_boundaries(
                 for sign in (-1, 1):
                     yy = y + sign * dy
                     xx = x + sign * dx
-                    while 0 <= yy < height and 0 <= xx < width and dark_mask[yy, xx]:
+                    while 0 <= yy < height and 0 <= xx < width and region_mask[yy, xx]:
                         line_width += 1
                         yy += sign * dy
                         xx += sign * dx
@@ -558,37 +582,69 @@ def fill_dark_boundaries(
             directional_width[y, x] = float(np.median(widths))
         return mask & (directional_width <= float(branch_width_thresh))
 
+    def candidate_labels(component_labels: np.ndarray) -> list[int]:
+        unique_labels = np.unique(component_labels[component_labels >= 0])
+        if dark_v_thresh is None:
+            return [int(label) for label in unique_labels]
+        return [
+            label
+            for label, median_value in label_median_value(component_labels).items()
+            if median_value <= float(dark_v_thresh)
+        ]
+
+    def removable_mask(component_labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        remove_mask = np.zeros(component_labels.shape, dtype=bool)
+        candidate_mask = np.zeros(component_labels.shape, dtype=bool)
+        for label in candidate_labels(component_labels):
+            region_mask = component_labels == label
+            candidate_mask |= region_mask
+            remove_mask |= thin_branch_mask(region_mask)
+        return remove_mask, candidate_mask
+
     fixed_remove_mask = None
     for _ in range(int(max_iterations)):
         labels = _split_connected_components(_compact_labels(labels))
-        dark_labels = [
-            label
-            for label, l_value in label_median_l(labels).items()
-            if l_value <= float(dark_l_thresh)
-        ]
-        if not dark_labels:
+        candidate_label_ids = candidate_labels(labels)
+        if not candidate_label_ids:
             break
 
-        dark_mask = np.isin(labels, dark_labels)
+        candidate_mask = np.isin(labels, candidate_label_ids)
         if fixed_skeleton_once:
             if fixed_remove_mask is None:
-                fixed_remove_mask = thin_branch_mask(dark_mask)
-            remove_mask = fixed_remove_mask & dark_mask
+                fixed_remove_mask, _ = removable_mask(labels)
+            remove_mask = fixed_remove_mask & candidate_mask
         else:
-            remove_mask = thin_branch_mask(dark_mask)
+            remove_mask, candidate_mask = removable_mask(labels)
 
         if not np.any(remove_mask):
             break
 
-        target_mask = (~remove_mask) & (~dark_mask)
-        if not np.any(target_mask):
-            target_mask = ~remove_mask
-        if not np.any(target_mask):
-            break
+        if dark_v_thresh is None:
+            next_labels = labels.copy()
+            changed_any_label = False
+            for label in np.unique(labels[remove_mask]):
+                label_remove_mask = remove_mask & (labels == label)
+                target_mask = (~remove_mask) & (labels != label)
+                if not np.any(target_mask):
+                    continue
+                _, nearest = ndi.distance_transform_edt(~target_mask, return_indices=True)
+                next_labels[label_remove_mask] = labels[
+                    nearest[0][label_remove_mask],
+                    nearest[1][label_remove_mask],
+                ]
+                changed_any_label = True
+            if not changed_any_label:
+                break
+        else:
+            target_mask = (~remove_mask) & (~candidate_mask)
+            if not np.any(target_mask):
+                target_mask = ~remove_mask
+            if not np.any(target_mask):
+                break
 
-        _, nearest = ndi.distance_transform_edt(~target_mask, return_indices=True)
-        next_labels = labels.copy()
-        next_labels[remove_mask] = labels[nearest[0][remove_mask], nearest[1][remove_mask]]
+            _, nearest = ndi.distance_transform_edt(~target_mask, return_indices=True)
+            next_labels = labels.copy()
+            next_labels[remove_mask] = labels[nearest[0][remove_mask], nearest[1][remove_mask]]
         if np.array_equal(next_labels, labels):
             break
 
@@ -602,6 +658,118 @@ def fill_dark_boundaries(
         "black_artifact_removed_superpixel_labels": labels,
         "black_artifact_removed_angle_map": cleaned_angle_map,
         "black_artifact_removed_mask": np.where(removed_mask_total, 255, 0).astype(np.uint8),
+        "angle_map_display": cleaned_angle_map,
+    }
+
+
+def _build_elongation_cache(
+    labels: np.ndarray,
+    *,
+    min_area: int,
+    neck_thresh: float,
+) -> dict[str, Any]:
+    """Pre-compute sub-component label map and elongation ratios (expensive).
+
+    Each connected component in *labels* is first split at "neck" pixels
+    (distance-transform <= neck_thresh), then each resulting sub-component
+    gets a unique integer ID in the returned sub_label_map and its
+    skeleton_length/area ratio is stored in sub_ratios.
+    """
+    from scipy import ndimage as ndi
+    from skimage.morphology import skeletonize
+
+    sub_label_map = np.zeros(labels.shape, dtype=np.int32)
+    sub_ratios: dict[int, float] = {}
+    next_id = 1
+
+    for label in np.unique(labels[labels >= 0]):
+        region_mask = labels == label
+        area = int(np.count_nonzero(region_mask))
+        if area < min_area:
+            continue
+
+        dist = cv2.distanceTransform(region_mask.astype(np.uint8), cv2.DIST_L2, 3)
+        body_mask = region_mask & (dist > neck_thresh)
+        n_sub, cv_sub = cv2.connectedComponents(body_mask.astype(np.uint8), connectivity=8)
+
+        if n_sub <= 1:
+            sub_label_map[region_mask] = next_id
+            skel_len = int(np.count_nonzero(skeletonize(region_mask)))
+            sub_ratios[next_id] = skel_len / area
+            next_id += 1
+            continue
+
+        # Assign neck pixels to the nearest body sub-component
+        _, nearest_sub = ndi.distance_transform_edt(cv_sub == 0, return_indices=True)
+        full_sub = cv_sub.copy()
+        neck_pixels = region_mask & (cv_sub == 0)
+        full_sub[neck_pixels] = cv_sub[nearest_sub[0][neck_pixels], nearest_sub[1][neck_pixels]]
+
+        for sub_id in range(1, n_sub):
+            sub_mask = (full_sub == sub_id) & region_mask
+            sub_area = int(np.count_nonzero(sub_mask))
+            if sub_area < min_area:
+                continue
+            sub_label_map[sub_mask] = next_id
+            skel_len = int(np.count_nonzero(skeletonize(sub_mask)))
+            sub_ratios[next_id] = skel_len / sub_area
+            next_id += 1
+
+    return {"sub_label_map": sub_label_map, "sub_ratios": sub_ratios}
+
+
+def fill_dark_boundaries_by_elongation(
+    theta_phi_angle_info: dict[str, Any],
+    *,
+    elongation_thresh: float,
+    min_area: int = 10,
+    neck_thresh: float = 2.0,
+) -> dict[str, Any]:
+    """Remove elongated dark boundaries using skeleton_length/area ratio.
+
+    On the first call the sub-component structure is computed (skeletonize +
+    neck-splitting) and cached inside the returned dict under '_elongation_cache'.
+    Subsequent calls reuse the cache, making them much faster.
+
+    elongation_thresh = 1 / max_width_px, so larger max_width removes wider lines.
+    """
+    from scipy import ndimage as ndi
+
+    labels = np.asarray(
+        theta_phi_angle_info["merged_superpixel_labels"], dtype=np.int32
+    ).copy()
+    base_rgb = _as_uint8_rgb(
+        theta_phi_angle_info.get(
+            "merged_superpixel_median_map",
+            theta_phi_angle_info["superpixel_median_map"],
+        )
+    )
+    labels = _split_connected_components(_compact_labels(labels))
+
+    cache = theta_phi_angle_info.get("_elongation_cache")
+    if cache is None:
+        cache = _build_elongation_cache(labels, min_area=min_area, neck_thresh=neck_thresh)
+
+    sub_label_map: np.ndarray = cache["sub_label_map"]
+    sub_ratios: dict[int, float] = cache["sub_ratios"]
+
+    remove_ids = [lid for lid, r in sub_ratios.items() if r >= elongation_thresh]
+    remove_mask = np.isin(sub_label_map, remove_ids) if remove_ids else np.zeros(labels.shape, dtype=bool)
+
+    if np.any(remove_mask):
+        target_mask = ~remove_mask
+        _, nearest = ndi.distance_transform_edt(~target_mask, return_indices=True)
+        next_labels = labels.copy()
+        next_labels[remove_mask] = labels[nearest[0][remove_mask], nearest[1][remove_mask]]
+        labels = _split_connected_components(_compact_labels(next_labels))
+
+    cleaned_angle_map = _region_median_color_map(base_rgb, labels)
+    return {
+        **theta_phi_angle_info,
+        "_elongation_cache": cache,
+        "black_artifact_removed_superpixel_labels": labels,
+        "black_artifact_removed_angle_map": cleaned_angle_map,
+        "black_artifact_removed_mask": np.where(remove_mask, 255, 0).astype(np.uint8),
         "angle_map_display": cleaned_angle_map,
     }
 

@@ -12,6 +12,7 @@ from niconavi_app.match_used_name import (
     GRAIN_MEASUREMENT_DIMENSION_MAP,
     GrainMeasurementDimension,
     get_grain_measurement_dimension,
+    get_grain_display_value_multiplier,
 )
 
 def get_pixel_to_micrometer_scale(stores: Stores) -> Optional[float]:
@@ -134,9 +135,9 @@ def convert_grain_units_for_targets(
         multiplier, unit = _compute_multiplier_and_unit(
             px_values[key], dimension, scale
         )
-        multiplier_map[key] = multiplier
+        multiplier_map[key] = multiplier * get_grain_display_value_multiplier(key)
         unit_map[key] = unit
-        if multiplier != 1.0 and len(px_values[key]) > 0:
+        if multiplier_map[key] != 1.0 and len(px_values[key]) > 0:
             conversion_needed = True
 
     if not conversion_needed:

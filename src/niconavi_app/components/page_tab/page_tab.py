@@ -6,9 +6,11 @@ from niconavi_app.components.page_tab.tabs.movie_tab import MovieTab
 from niconavi_app.components.page_tab.tabs.center_tab import CenterTab
 from niconavi_app.components.page_tab.tabs.grain_tab import GrainTab
 from niconavi_app.components.page_tab.tabs.analysis_tab import AnalysisTab
+from niconavi_app.components.page_tab.tabs.function_tab import FunctionTab
 from niconavi_app.tools.tools import switch_tab_index
 from niconavi_app.components.page_tab.tabs.filter_tab import FilterTab
 from niconavi_app.components.page_tab.tabs.merge_component import MergeTab
+from niconavi_app.app_config import ENABLE_FUNCTION_TAB
 
 import flet as ft
 from logging import Logger, getLogger
@@ -31,6 +33,14 @@ class PageTabs(ft.Container):
 
         self.width = stores.appearance.tabs_width
         self.expand = True
+        function_tabs = []
+        if ENABLE_FUNCTION_TAB:
+            function_tabs.append(
+                ReactiveTab(
+                    text="function",
+                    content=FunctionTab(page, stores),
+                )
+            )
 
         self.content = ft.Column(
             [
@@ -109,6 +119,7 @@ class PageTabs(ft.Container):
                             # ),
                             # icon=ft.Icons.BAR_CHART,
                         ),
+                        *function_tabs,
                     ],
                 ),
             ]

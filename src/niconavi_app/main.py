@@ -46,14 +46,28 @@ import matplotlib
 matplotlib.use("svg")  # 非対話型バックエンドに切り替え
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-UPLOAD_ROOT = (PROJECT_ROOT / "uploads").resolve()
+# Where flet writes what the user uploads. In a checkout that is
+# <parent of this repo>/uploads, where it has always been. An installed build
+# has no such layout - parents[3] of a site-packages path is somewhere inside
+# the runtime, which may not even be writable - so FLET_UPLOAD_DIR wins when
+# the caller sets it. packaging/build_linux.sh's launcher does exactly that.
+_configured_upload_dir = os.environ.get("FLET_UPLOAD_DIR")
+UPLOAD_ROOT = (
+    Path(_configured_upload_dir).expanduser().resolve()
+    if _configured_upload_dir
+    else (PROJECT_ROOT / "uploads").resolve()
+)
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("FLET_SECRET_KEY", "niconavi-dev-secret")
-os.environ.setdefault("FLET_UPLOAD_DIR", str(UPLOAD_ROOT))
+os.environ["FLET_UPLOAD_DIR"] = str(UPLOAD_ROOT)
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
-DEBUG_START_PROJECT_DIR = PROJECT_ROOT / "gui" / "for-debug" / "start-from-project"
+# Drop a .niconavi file in here and the newest one loads on startup. It lives
+# inside this repo rather than the parent one: reaching out to a sibling of
+# PROJECT_ROOT made the app unusable from a plain niconavi_app checkout.
+APP_ROOT = Path(__file__).resolve().parents[2]
+DEBUG_START_PROJECT_DIR = APP_ROOT / "for-debug" / "start-from-project"
 
 
 def find_debug_start_project() -> Path | None:
@@ -122,7 +136,7 @@ def main(page: ft.Page) -> None:
     )
 
     image_selector_header = ft.Container(
-        content=CustomText("image list"),
+        content=CustomText("images"),
         height=25,
         width=200,
         margin=0,

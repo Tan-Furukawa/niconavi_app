@@ -45,14 +45,11 @@ class ImageSelector(ft.Container):
             gr_angle_map,
             gr_R_color,
             gr_min_retardation_color,
-            gr_retardation,
             gr_extinction_angle,
             gr_grain_map,
             # gr_grain_map_with_boundary,
             gr_p45_R_color_map,
             gr_m45_R_color_map,
-            gr_p45_R_map,
-            gr_m45_R_map,
             gr_azimuth,
             gr_tilt0,
             gr_tilt45,
@@ -60,6 +57,9 @@ class ImageSelector(ft.Container):
             gr_horiz45,
             # gr_quality,
             gr_mask,
+            gr_add_image,
+            gr_color_change0,
+            gr_color_change45,
             # gr_delta_R_tilt_0,
             # gr_delta_R_tilt_45,
         ) = make_grain_classification_button_visible_state(stores, 2)
@@ -104,6 +104,8 @@ class ImageSelector(ft.Container):
             cip_polar90,
             cip_polar180,
             cip_polar360,
+            cip_rgb_before,
+            cip_rgb_after,
         ) = make_cip_button_visible_state(stores, 4)
 
         spo_spo, spo_ellipse, spo_major_axis = (
@@ -125,7 +127,7 @@ class ImageSelector(ft.Container):
                 make_reactive_text(stores, "XRL", 2),
                 gr_angle_map,
                 gr_R_color,
-                gr_retardation,
+                # gr_retardation,  # "R" retired (see move_v3.md)
                 # gr_quality,
                 make_reactive_text(stores, "grain map", 2),
                 gr_grain_map,
@@ -159,9 +161,11 @@ class ImageSelector(ft.Container):
                 ),
                 gr_horiz0,
                 gr_tilt0,
+                gr_color_change0,
                 # gr_delta_R_tilt_0,
                 gr_horiz45,
                 gr_tilt45,
+                gr_color_change45,
                 # gr_delta_R_tilt_45,
                 make_reactive_text(
                     stores,
@@ -169,10 +173,11 @@ class ImageSelector(ft.Container):
                     2,
                     lambda: exist_in_raw_maps(stores, "p45_R_color_map"),
                 ),
+                gr_add_image,
                 gr_p45_R_color_map,
                 gr_m45_R_color_map,
-                gr_p45_R_map,
-                gr_m45_R_map,
+                # gr_p45_R_map,  # "φex+45°" retired (see move_v3.md)
+                # gr_m45_R_map,  # "φex-45°" retired (see move_v3.md)
                 # make_reactive_text(stores, "classification", 3),
                 # fil_classification,
                 # fil_index,
@@ -254,6 +259,20 @@ class ImageSelector(ft.Container):
                 cip_polar90,
                 cip_polar180,
                 cip_polar360,
+                make_reactive_text(
+                    stores,
+                    "color check",
+                    4,
+                    lambda: stores.ui.analysis_tab.plot_option.get() == "CPO"
+                    and stores.ui.analysis_tab.cip_regression_before_figure.get()
+                    is not None,
+                    [
+                        stores.ui.analysis_tab.plot_option,
+                        stores.ui.analysis_tab.cip_regression_before_figure,
+                    ],
+                ),
+                cip_rgb_before,
+                cip_rgb_after,
             ],
             scroll=ft.ScrollMode.ADAPTIVE,
         )

@@ -12,7 +12,11 @@ from niconavi_app.components.labeling_app.ui_theme import (
     TEXT_COLOR,
     apply_border,
 )
-from niconavi_app.components.common_component import CustomExecuteButton, confirm_action
+from niconavi_app.components.common_component import (
+    CustomExecuteButton,
+    confirm_discard_downstream,
+    FILTER_TAB_STAGE,
+)
 from niconavi_app.components.log_view import update_logs
 
 
@@ -248,21 +252,13 @@ def create_labeling_right_container(
             update_logs(stores, ("No labeled samples to save.", "err"))
             return
 
-        def finish() -> None:
-            controller.finish_labeling()
-
-        if stores.computation_result.grain_classification_result.get() is not None:
-            if page is not None:
-                confirm_action(
-                    page,
-                    "Save filter labels?",
-                    "This will replace filter classification and clear later analysis results.",
-                    finish,
-                )
-            else:
-                finish()
-            return
-        finish()
+        confirm_discard_downstream(
+            page,
+            stores,
+            FILTER_TAB_STAGE,
+            "Save filter labels",
+            controller.finish_labeling,
+        )
 
     done_button = CustomExecuteButton(
         text="Done",
