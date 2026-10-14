@@ -18,7 +18,12 @@ def main() -> None:
         if not env.get("PYTHONPATH")
         else str(src_dir) + os.pathsep + env["PYTHONPATH"]
     )
-    result = subprocess.run([sys.executable, "-u", "-m", "niconavi_app.main"], env=env)
+    # Forward command-line options so ``python niconavi.py --web`` and the
+    # server configuration options behave exactly like the package entrypoint.
+    result = subprocess.run(
+        [sys.executable, "-u", "-m", "niconavi_app.main", *sys.argv[1:]],
+        env=env,
+    )
     raise SystemExit(result.returncode)
 
 

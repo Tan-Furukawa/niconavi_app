@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.tan_furukawa.NicoNavi</id>
+  <name>NicoNavi</name>
+  <summary>Polarised-light microscopy analysis</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <description>
+    <p>
+      NicoNavi provides extinction-angle and c-axis orientation mapping from
+      polarised-light microscopy of thin sections.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.tan_furukawa.NicoNavi.desktop</launchable>
+  <url type="homepage">https://tan-furukawa.github.io/niconavi/</url>
+  <content_rating type="oars-1.1" />
+</component>

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=NicoNavi
+Comment=Polarised-light microscopy analysis
+Exec=niconavi
+Icon=niconavi
+Terminal=false
+Categories=Science;
+StartupNotify=true

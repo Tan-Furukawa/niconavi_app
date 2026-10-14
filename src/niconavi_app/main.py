@@ -95,6 +95,7 @@ def main(page: ft.Page) -> None:
     page.padding = 0
     page.title = stores.appearance.niconavi_version
     page.bgcolor = "#ff444444"
+    page.window.icon = "favicon.png"
 
     # ! ===================
     def terminate_process() -> None:
@@ -111,7 +112,11 @@ def main(page: ft.Page) -> None:
         logger.info("Page disconnected; shutting down server.")
         threading.Thread(target=terminate_process, daemon=True).start()
 
-    page.on_disconnect = handle_disconnect
+    # A native Flet window makes ft.app() return normally when it is closed.
+    # Killing its parent here could also terminate the user's shell because
+    # packaged launchers replace themselves with this Python process.
+    if page.web:
+        page.on_disconnect = handle_disconnect
     # ! ===================
 
     log_column_controls = ReactiveState(
@@ -274,25 +279,31 @@ if __name__ == "__main__":
     import uvicorn
 
     parser = argparse.ArgumentParser(description="Run NicoNavi GUI application.")
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--web",
+        action="store_true",
+        help="Serve the application in a web browser instead of opening a desktop window.",
+    )
+    mode.add_argument(
         "--desktop",
         action="store_true",
-        help="Launch as a desktop application instead of serving via web.",
+        help="Launch as a desktop application (the default).",
     )
     parser.add_argument(
         "--host",
         default="localhost",
-        help="Host interface for the FastAPI server (web mode only).",
+        help="Host interface for the FastAPI server (--web only).",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=8551,
-        help="Port for the FastAPI server (web mode only).",
+        help="Port for the FastAPI server (--web only).",
     )
     args = parser.parse_args()
 
-    if args.desktop:
+    if not args.web:
         ft.app(
             target=main,
             view=ft.AppView.FLET_APP,
