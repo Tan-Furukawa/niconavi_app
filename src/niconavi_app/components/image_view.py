@@ -1,0 +1,177 @@
+from niconavi_app.reactive_state import ReactiveMatplotlibChart, ReactiveColumn
+from niconavi_app.stores import Stores
+from niconavi_app.state import ReactiveState
+import flet as ft
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import Figure
+
+from niconavi_app.components.labeling_app.label_controls import LabelSelectionPane
+from niconavi_app.components.labeling_app.labeling_controller import LabelingController
+from niconavi_app.components.labeling_app.labeling_left_view import create_labeling_left_container
+from niconavi_app.components.view.analysis_view import at_analysis_tab
+from niconavi_app.components.view.movie_view import at_movie_tab
+from niconavi_app.components.view.center_view import at_center_tab
+from niconavi_app.components.view.grain_view import at_grain_tab
+from niconavi_app.components.view.filter_view import at_filter_tab
+from niconavi_app.components.view.spatial_units import get_pixel_to_micrometer_scale
+from niconavi_app.components.page_tab.tabs.function_tab import at_function_tab
+from niconavi_app.tools.no_image import get_no_image
+from logging import getLogger
+
+
+logger = getLogger("niconavi").getChild(__name__)
+
+
+def which_tab_opened(stores: Stores) -> Figure:
+    plt.close("all")  # 描画する前に、メモリ上のプロットたちを開放させる
+
+    pixel_scale_um = get_pixel_to_micrometer_scale(stores)
+    if pixel_scale_um is None:
+        stores.ui.image_viewer.pixel_size_um = None  # type: ignore[attr-defined]
+        stores.ui.image_viewer.display_unit = "px"  # type: ignore[attr-defined]
+    else:
+        stores.ui.image_viewer.pixel_size_um = pixel_scale_um  # type: ignore[attr-defined]
+        stores.ui.image_viewer.display_unit = "μm"  # type: ignore[attr-defined]
+
+    match stores.ui.selected_index.get():
+
+        case 0:
+            logger.debug("Rendering movie tab image view.")
+            return at_movie_tab(stores)
+        case 1:
+            logger.debug("Rendering center tab image view.")
+            return at_center_tab(stores)
+        case 2:
+            logger.debug("Rendering map tab image view.")
+            return at_grain_tab(stores)
+        # case 3:
+        #     print("-----event at merge tab-----")
+        #     return at_filter_tab(stores, stores.ui.selected_button_at_merge_tab)
+        case 3:
+            logger.debug("Rendering filter tab image view.")
+            return at_filter_tab(stores, stores.ui.selected_button_at_filter_tab)
+        case 4:
+            logger.debug("Rendering analysis tab image view.")
+            return at_analysis_tab(stores)
+        case 5:
+            print("-----event at function tab-----")
+            return at_function_tab(stores)
+        case _:
+            logger.warning("No image view renderer for selected tab index %s.", stores.ui.selected_index.get())
+            return get_no_image()
+
+
+class ImageView(ft.Container):
+    def __init__(self, stores: Stores, page: ft.Page):
+        super().__init__()
+        self.expand = True
+
+        at_change_stores_list = [
+            stores.ui.selected_index,
+            stores.ui.force_update_image_view,
+            # stores.ui.selected_button_at_common_image_view,
+            stores.ui.selected_button_at_movie_tab,
+            stores.ui.selected_button_at_grain_tab,
+            stores.ui.selected_button_at_filter_tab,
+            stores.ui.selected_button_at_merge_tab,
+            stores.ui.selected_button_at_analysis_tab,
+            stores.ui.display_grain_boundary,
+            stores.ui.analysis_tab.cip_bandwidth,
+            stores.computation_result.first_image,
+            # The movie tab previews its frames white-balanced or not
+            # depending on this, so flipping it has to redraw the view.
+            stores.computation_result.apply_white_balance,
+            stores.computation_result.rotation_img,
+            stores.computation_result.center_int_x,
+            stores.computation_result.center_int_y,
+            stores.computation_result.raw_maps,
+            stores.computation_result.grain_map,
+            stores.computation_result.grain_map_with_boundary,
+            stores.computation_result.grain_boundary,
+            stores.computation_result.grain_classification_image,
+            stores.computation_result.grain_segmented_maps,
+            stores.computation_result.grain_classification_result,
+            stores.ui.apply_mask,
+            stores.ui.analysis_tab.plot_option,
+            stores.ui.analysis_tab.computation_unit,
+            stores.ui.analysis_tab.cip_contour,
+            stores.ui.analysis_tab.cip_theme,
+            stores.ui.analysis_tab.cip_display_points,
+            stores.ui.analysis_tab.cip_points_noise_size_percent,
+            stores.ui.analysis_tab.grain_rose_diagram_target,
+            stores.ui.analysis_tab.grain_histogram_target,
+            stores.ui.analysis_tab.scatter_target_x,
+            stores.ui.analysis_tab.scatter_target_y,
+            stores.ui.analysis_tab.histogram_alpha,
+            stores.ui.analysis_tab.rose_alpha,
+            stores.ui.analysis_tab.rose_flip,
+            stores.ui.analysis_tab.rose_stat_method,
+            stores.ui.analysis_tab.histogram_stat_method,
+            stores.ui.analysis_tab.scatter_x_stat_method,
+            stores.ui.analysis_tab.scatter_y_stat_method,
+            stores.computation_result.tilt_image_info.tilt_image0,
+            stores.computation_result.tilt_image_info.tilt_image45,
+            stores.ui.analysis_tab.scatter_regression_origin,
+            stores.ui.analysis_tab.scatter_show_regression,
+            stores.ui.analysis_tab.histogram_log_x,
+            stores.ui.analysis_tab.scatter_log_x,
+            stores.ui.analysis_tab.scatter_log_y,
+            stores.ui.analysis_tab.cip_regression_before_figure,
+            stores.ui.analysis_tab.cip_regression_after_figure,
+            stores.ui.grain_tab.slider_contrast,
+            stores.ui.grain_tab.slider_brightness,
+            stores.ui.grain_tab.slider_median_kernel,
+            stores.ui.grain_tab.brightness_correction,
+            stores.ui.map_tab.angle_map_display,
+            stores.ui.function_tab.figure,
+            stores.computation_result.plot_parameters.histogram_bins,
+            stores.computation_result.plot_parameters.rose_diagram_bins,
+            stores.computation_result.plot_parameters.rose_diagram180_bins,
+            stores.computation_result.plot_parameters.rose_diagram90_bins,
+            stores.ui.one_pixel,
+        ]
+
+        image = ReactiveState(lambda: which_tab_opened(stores), at_change_stores_list)
+
+        controller = LabelingController(stores=stores)
+
+        label_selection = LabelSelectionPane(
+            on_add_label=controller.handle_label_added,
+            on_remove_label=controller.handle_label_removed,
+            on_select_label=controller.handle_label_selected,
+            on_color_changed=controller.handle_label_color_changed,
+        )
+
+        controller.attach_label_selection(label_selection)
+
+        left_container = create_labeling_left_container(
+            stores=stores, controller=controller, page=page
+        )
+
+        self.content = ft.Container(
+            content=ReactiveColumn(
+                [
+                    ReactiveColumn(
+                        [
+                            ft.Container(
+                                content=ReactiveMatplotlibChart(image),
+                                height=700,
+                            )
+                        ],
+                        visible=ReactiveState(
+                            lambda: stores.ui.selected_index.get() != 3,
+                            [stores.ui.selected_index],
+                        ),
+                    ),
+                    ReactiveColumn(
+                        [left_container],
+                        visible=ReactiveState(
+                            lambda: stores.ui.selected_index.get() == 3,
+                            [stores.ui.selected_index],
+                        ),
+                    ),
+                ]
+            ),
+            # alignment=ft.alignment.top_left,
+            alignment=ft.alignment.center,
+        )
