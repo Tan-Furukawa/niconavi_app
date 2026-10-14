@@ -51,8 +51,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\NicoNavi"; Filename: "{app}\runtime\pythonw.exe"; Parameters: """{app}\launcher.pyw"""; WorkingDir: "{localappdata}\NicoNavi"; IconFilename: "{app}\niconavi.ico"
-Name: "{autodesktop}\NicoNavi"; Filename: "{app}\runtime\pythonw.exe"; Parameters: """{app}\launcher.pyw"""; WorkingDir: "{localappdata}\NicoNavi"; IconFilename: "{app}\niconavi.ico"; Tasks: desktopicon
+Name: "{autoprograms}\NicoNavi"; Filename: "{app}\runtime\pythonw.exe"; Parameters: """{app}\launcher.pyw"""; WorkingDir: "{app}"; IconFilename: "{app}\niconavi.ico"
+Name: "{autodesktop}\NicoNavi"; Filename: "{app}\runtime\pythonw.exe"; Parameters: """{app}\launcher.pyw"""; WorkingDir: "{app}"; IconFilename: "{app}\niconavi.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\runtime\pythonw.exe"; Parameters: """{app}\launcher.pyw"""; WorkingDir: "{localappdata}\NicoNavi"; Description: "{cm:LaunchProgram,NicoNavi}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\runtime\pythonw.exe"; Parameters: """{app}\launcher.pyw"""; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,NicoNavi}"; Flags: nowait postinstall skipifsilent
