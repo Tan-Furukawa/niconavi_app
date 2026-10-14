@@ -104,6 +104,7 @@ try {
     }
 
     Copy-Item (Join-Path $PackagingDirectory "desktop_launcher.py") (Join-Path $StageDirectory "launcher.pyw")
+    Copy-Item (Join-Path $PackagingDirectory "windows_taskbar.py") (Join-Path $StageDirectory "windows_taskbar.py")
     Copy-Item (Join-Path $ProjectRoot "src\niconavi_app\assets\favicon.png") (Join-Path $StageDirectory "niconavi.png")
     Copy-Item (Join-Path $ProjectRoot "LICENSE") (Join-Path $StageDirectory "LICENSE.txt")
 

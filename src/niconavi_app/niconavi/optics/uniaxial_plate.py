@@ -1,4 +1,6 @@
 # %%
+import sys
+
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -159,7 +161,15 @@ def calc_color_chart(
 
     color_chart = np.zeros((len(h), len(w), 3), dtype=np.uint8)
 
-    for i, xi in tqdm(enumerate(w), total=len(w), desc="make retardation color chart"):
+    # pythonw.exe has no stderr unless the launcher supplies one. tqdm writes
+    # there by default, so keep this calculation usable from any windowless
+    # entry point as well as from the packaged launcher.
+    for i, xi in tqdm(
+        enumerate(w),
+        total=len(w),
+        desc="make retardation color chart",
+        disable=sys.stderr is None,
+    ):
         progress_callback((i + 1) / len(w))
         for j, yj in enumerate(h):
             color_chart[j, i] = xy_to_color(xi, yj)
