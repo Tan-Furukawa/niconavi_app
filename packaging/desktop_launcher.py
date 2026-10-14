@@ -88,6 +88,11 @@ def main() -> None:
     os.environ.setdefault("MPLCONFIGDIR", str(cache_dir / "matplotlib"))
     os.environ.setdefault("NUMBA_CACHE_DIR", str(cache_dir / "numba"))
 
+    # A normal ``python launcher.pyw`` invocation adds the script directory to
+    # sys.path, but the packaging smoke test executes it through runpy.  Add it
+    # explicitly so bundled launcher helpers resolve the same way in both
+    # cases.
+    sys.path.insert(0, str(PACKAGE_ROOT))
     sys.path.insert(0, str(LIB_DIR))
 
     # The current logger writes niconavi.log relative to the working directory.
