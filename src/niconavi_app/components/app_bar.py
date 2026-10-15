@@ -49,6 +49,7 @@ from niconavi_app.components.common_component import (
     make_reactive_float_text_filed,
     CustomText,
     CustomReactiveCheckbox,
+    make_confirmation_dialog,
 )
 from niconavi_app.components.log_view import update_logs
 from niconavi_app.download_manager import register_download
@@ -336,17 +337,10 @@ def on_result_load_project_file(
                 load_existing_project(stores, resolved_path, logger=logger)
                 page.close(dlg_modal)
 
-            dlg_modal = ft.AlertDialog(
-                modal=True,
-                title=CustomText("Please confirm"),
-                content=CustomText(
-                    "Loading a project will discard the current session. Continue?"
-                ),
-                actions=[
-                    ft.TextButton("Yes", on_click=handle_yes),
-                    ft.TextButton("No", on_click=handle_no),
-                ],
-                actions_alignment=ft.MainAxisAlignment.END,
+            dlg_modal = make_confirmation_dialog(
+                "Please confirm",
+                "Loading a project will discard the current session. Continue?",
+                [("Yes", handle_yes), ("No", handle_no)],
             )
 
             page.open(dlg_modal)

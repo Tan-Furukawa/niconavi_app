@@ -28,6 +28,30 @@ class CustomText(ft.Text):
         self.color = ft.Colors.WHITE
 
 
+def make_confirmation_dialog(
+    title: str,
+    message: str,
+    actions: list[tuple[str, Callable[[ft.ControlEvent], None]]],
+) -> ft.AlertDialog:
+    """Create a confirmation dialog whose colors do not depend on the OS theme."""
+    return ft.AlertDialog(
+        modal=True,
+        bgcolor="#ff333333",
+        surface_tint_color=ft.Colors.TRANSPARENT,
+        title=CustomText(title),
+        content=CustomText(message),
+        actions=[
+            ft.TextButton(
+                label,
+                style=ft.ButtonStyle(color=ft.Colors.LIGHT_BLUE_200),
+                on_click=handler,
+            )
+            for label, handler in actions
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+
+
 def confirm_action(
     page: ft.Page,
     title: str,
@@ -41,15 +65,10 @@ def confirm_action(
         page.close(dialog)
         on_confirm()
 
-    dialog = ft.AlertDialog(
-        modal=True,
-        title=CustomText(title),
-        content=CustomText(message),
-        actions=[
-            ft.TextButton("Cancel", on_click=handle_cancel),
-            ft.TextButton("Continue", on_click=handle_confirm),
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
+    dialog = make_confirmation_dialog(
+        title,
+        message,
+        [("Cancel", handle_cancel), ("Continue", handle_confirm)],
     )
     page.open(dialog)
 
