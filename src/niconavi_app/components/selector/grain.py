@@ -82,7 +82,7 @@ def make_grain_classification_button_visible_state(
 
     R_color = make_elevated_button(
         stores,
-        "color",
+        "Maximum intensity image",
         stores.ui.selected_button_at_grain_tab,
         selected_index,
         5,

@@ -12,7 +12,7 @@ from niconavi_app.niconavi.tools.str_parser import parse_larger_than_0
 # from niconavi_app.components.selector.always import make_always_visible_state
 from logging import getLogger, Logger
 from niconavi_app.reactive_state import ReactiveProgressRing, ReactiveText, ReactiveCheckbox
-from niconavi_app.state import ReactiveState
+from niconavi_app.state import ReactiveState, State
 from niconavi_app.save import (
     collect_project_ui_state,
     save_file_result,
@@ -71,6 +71,58 @@ from niconavi_app.niconavi.angle_map_boundary import (
     create_shock_filter_iterator,
     make_theta_phi_angle_info,
 )
+
+
+def image_width_micrometers(
+    pixel_size_micrometers: float | int | None,
+    resolution_width: int,
+) -> float | None:
+    if pixel_size_micrometers is None or resolution_width <= 0:
+        return None
+    return float(pixel_size_micrometers) * resolution_width
+
+
+def pixel_size_micrometers(
+    image_width_micrometers: float | int | None,
+    resolution_width: int,
+) -> float | None:
+    if image_width_micrometers is None or resolution_width <= 0:
+        return None
+    return float(image_width_micrometers) / resolution_width
+
+
+def make_image_width_input(stores: Stores) -> ft.TextField:
+    """Edit physical image width while retaining the internal µm/px scale."""
+
+    def current_image_width() -> float | None:
+        return image_width_micrometers(
+            stores.ui.one_pixel.get(),
+            stores.computation_result.resolution_width.get(),
+        )
+
+    displayed_width = State(current_image_width())
+
+    def update_pixel_size() -> None:
+        stores.ui.one_pixel.set(
+            pixel_size_micrometers(
+                displayed_width.get(),
+                stores.computation_result.resolution_width.get(),
+            )
+        )
+
+    def update_displayed_width() -> None:
+        displayed_width.set(current_image_width())
+
+    displayed_width.bind(update_pixel_size)
+    stores.ui.one_pixel.bind(update_displayed_width)
+    stores.computation_result.resolution_width.bind(update_displayed_width)
+
+    return make_reactive_float_text_filed(
+        stores,
+        displayed_width,
+        parse_larger_than_0,
+        accept_None=True,
+    )
 
 
 def get_current_datetime_str() -> str:
@@ -595,13 +647,8 @@ class niconaviAppBar:
 
                 ft.Row(
                     [
-                        CustomText("1px:"),
-                        make_reactive_float_text_filed(
-                            stores,
-                            stores.ui.one_pixel,
-                            parse_larger_than_0,
-                            accept_None=True,
-                        ),
+                        CustomText("Image width:"),
+                        make_image_width_input(stores),
                         CustomText("μm"),
                     ]
                 ),
