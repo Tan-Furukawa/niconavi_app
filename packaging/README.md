@@ -68,15 +68,15 @@ dist\windows\NicoNavi-<バージョン>-Setup-x64.exe
 
 `v*`に一致するタグをpushした場合も、自動的にビルドされます。
 
-ワークフロー内では`Windows/Setup.exe`が作成されます。ダウンロードした
+ワークフロー内では`Windows/NicoNavi-Setup.exe`が作成されます。ダウンロードした
 `NicoNavi-Windows`を展開すると、次のファイルが含まれています。
 
 ```text
-Setup.exe
-Setup.exe.sha256
+NicoNavi-Setup.exe
+NicoNavi-Setup.exe.sha256
 ```
 
-`Setup.exe.sha256`には、`Setup.exe`が破損していないか確認するための
+`NicoNavi-Setup.exe.sha256`には、`NicoNavi-Setup.exe`が破損していないか確認するための
 SHA-256ハッシュが記録されています。
 
 これらはGitHub Releaseではなく、GitHub ActionsのArtifactとしてGitHub側に
@@ -165,12 +165,12 @@ The `Build Windows installer` workflow runs the same build on
 and select **Run workflow**. It also runs automatically for tags matching
 `v*`.
 
-The job creates `Windows/Setup.exe`. Download the `NicoNavi-Windows` artifact
+The job creates `Windows/NicoNavi-Setup.exe`. Download the `NicoNavi-Windows` artifact
 from the completed workflow run. After extraction it contains:
 
 ```text
-Setup.exe
-Setup.exe.sha256
+NicoNavi-Setup.exe
+NicoNavi-Setup.exe.sha256
 ```
 
 Action artifacts are stored by GitHub for 14 days and then deleted

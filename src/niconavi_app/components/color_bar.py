@@ -1,12 +1,9 @@
 import flet as ft
+import flet.canvas as cv
 import numpy as np
-from typing import NewType
-from numpy.typing import NDArray
 from niconavi_app.niconavi.optics.uniaxial_plate import get_retardation_color_chart
 from niconavi_app.niconavi.image.type import D1RGB_Array
 from niconavi_app.niconavi.tools.type import D1FloatArray
-import math
-import base64
 
 from niconavi_app.components.common_component import (
     CustomText,
@@ -69,58 +66,74 @@ def rgb_array_to_hex_colors(color_array: D1RGB_Array) -> list[str]:
     return [f"#{r:02x}{g:02x}{b:02x}" for (r, g, b) in color_array]
 
 
-def build_ticks_row(
-    tick_values: D1FloatArray, tick_width: int, tick_height: int
-) -> ft.Row:
-    """
-    tick_values の各値に対応する位置に目盛り線を配置する Row を作成する。
-    Row の alignment を SPACE_BETWEEN にすることで、各目盛りが均等配置されます。
-    """
-    children = []
-    for i, _ in enumerate(tick_values):
-        if i % 10 == 0:
-            children.append(
-                ft.Container(width=tick_width, height=tick_height, bgcolor="white")
-            )
-        else:
-            children.append(
-                ft.Container(width=tick_width, height=tick_height / 2, bgcolor="white")
-            )
-    return ft.Row(
-        controls=children,
-        height=tick_height,
-        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-        vertical_alignment=ft.CrossAxisAlignment.START,
-    )
+_MINOR_TICK_COUNT = 100
+_MAJOR_TICK_COUNT = 10
+_MIN_LABEL_SPACING = 50
 
 
-def build_labels_row(tick_values: D1FloatArray, label_width: int) -> ft.Row:
-    """
-    各目盛りに対して、ラベル（テキスト）を均等配置する Row を作成する。
-    最初と最後のラベルは左右に半分の幅を割り当てています。
-    """
-    children = []
-    for i, tick in enumerate(tick_values):
-        if i == 0:
-            label = ft.Container(
-                content=CustomText(f"{tick:.0f}", size=12),
-                width=label_width // 2,
-                alignment=ft.alignment.bottom_left,
+def _label_stride(width: float) -> int:
+    """Return a readable major-tick interval for the available width."""
+    major_tick_spacing = max(width, 0) / _MAJOR_TICK_COUNT
+    for stride in (1, 2, 5, 10):
+        if major_tick_spacing * stride >= _MIN_LABEL_SPACING:
+            return stride
+    return 10
+
+
+def _build_scale_shapes(width: float, tick_height: float) -> list[cv.Line | cv.Text]:
+    """Draw ticks and labels in one coordinate system so they stay aligned."""
+    width = max(width, 0)
+    white_paint = ft.Paint(color=ft.Colors.WHITE, stroke_width=1)
+    label_style = ft.TextStyle(size=12, color=ft.Colors.WHITE)
+    shapes: list[cv.Line | cv.Text] = []
+
+    for index in range(_MINOR_TICK_COUNT + 1):
+        x = width * index / _MINOR_TICK_COUNT
+        is_major = index % (_MINOR_TICK_COUNT // _MAJOR_TICK_COUNT) == 0
+        shapes.append(
+            cv.Line(
+                x1=x,
+                y1=0,
+                x2=x,
+                y2=tick_height if is_major else tick_height / 2,
+                paint=white_paint,
             )
-        elif i == len(tick_values) - 1:
-            label = ft.Container(
-                content=CustomText("", size=12),
-                width=label_width // 2,
-                alignment=ft.alignment.bottom_right,
-            )
+        )
+
+    stride = _label_stride(width)
+    for index in range(0, _MAJOR_TICK_COUNT + 1, stride):
+        x = width * index / _MAJOR_TICK_COUNT
+        if index == 0:
+            alignment = ft.alignment.top_left
+        elif index == _MAJOR_TICK_COUNT:
+            alignment = ft.alignment.top_right
         else:
-            label = ft.Container(
-                content=CustomText(f"{tick:.0f}", size=12),
-                width=label_width,
-                alignment=ft.alignment.center,
+            alignment = ft.alignment.top_center
+        shapes.append(
+            cv.Text(
+                x=x,
+                y=tick_height + 2,
+                text=str(index * 200),
+                style=label_style,
+                alignment=alignment,
             )
-        children.append(label)
-    return ft.Row(controls=children, alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        )
+
+    return shapes
+
+
+class ResponsiveScale(cv.Canvas):
+    def __init__(self, tick_height: float = 10) -> None:
+        self.tick_height = tick_height
+        super().__init__(
+            height=tick_height + 20,
+            resize_interval=50,
+            on_resize=self._handle_resize,
+        )
+
+    def _handle_resize(self, event: cv.CanvasResizeEvent) -> None:
+        self.shapes = _build_scale_shapes(event.width, self.tick_height)
+        self.update()
 
 
 def build_mark_row(
@@ -224,8 +237,6 @@ class ColorChartBar(ft.Column):
         hist_height = 50  # ヒストグラムの高さ
         gradient_height = 20  # カラーバーの高さ
         tick_height = 10  # 目盛り線の高さ
-        tick_width = 2  # 目盛り線の幅
-        label_width = 30  # 各目盛りラベルの幅
         max_val = 2000
 
         # ヒストグラム用のデータ（例として np.random.random を使用）
@@ -247,11 +258,7 @@ class ColorChartBar(ft.Column):
             ),
         )
 
-        # 目盛り・ラベルRowの作成
-        tick_values_ticks = D1FloatArray(np.linspace(0, 200, 101))
-        ticks_row = build_ticks_row(tick_values_ticks, tick_width, tick_height)
-        tick_values_labels = D1FloatArray(np.linspace(0, 2000, 11))
-        labels_row = build_labels_row(tick_values_labels, label_width)
+        scale = ResponsiveScale(tick_height)
 
         bar1 = make_color_bar(0.2, 0.7, 0.9)
 
@@ -260,10 +267,9 @@ class ColorChartBar(ft.Column):
             # histogram_row,  # ヒストグラム（カラーバーの上部）
             # bar1,
             gradient_bar,  # グラデーションカラーバー
-            ticks_row,  # カラーバー下部目盛り
-            labels_row,  # ラベル
+            scale,  # カラーバー下部の目盛りとラベル
         ]
-        self.horizontal_alignment = "center"
+        self.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
         self.spacing = 0
 
 

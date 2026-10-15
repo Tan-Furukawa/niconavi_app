@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build-windows:
-    name: Windows / Setup.exe
+    name: Windows / NicoNavi-Setup.exe
     runs-on: windows-latest
     timeout-minutes: 60
 
@@ -48,7 +48,7 @@ jobs:
           ./packaging/windows/build_windows.ps1 `
             -OutputDirectory (Join-Path $PWD "dist/windows")
 
-      - name: Prepare Windows/Setup.exe
+      - name: Prepare Windows/NicoNavi-Setup.exe
         shell: pwsh
         run: |
           $setups = @(Get-ChildItem "dist/windows/NicoNavi-*-Setup-x64.exe" -File)
@@ -57,13 +57,13 @@ jobs:
           }
 
           New-Item -ItemType Directory -Force -Path "Windows" | Out-Null
-          Copy-Item -LiteralPath $setups[0].FullName -Destination "Windows/Setup.exe"
+          Copy-Item -LiteralPath $setups[0].FullName -Destination "Windows/NicoNavi-Setup.exe"
 
-          $hash = (Get-FileHash "Windows/Setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  Setup.exe" | Set-Content "Windows/Setup.exe.sha256" -Encoding ascii
+          $hash = (Get-FileHash "Windows/NicoNavi-Setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  NicoNavi-Setup.exe" | Set-Content "Windows/NicoNavi-Setup.exe.sha256" -Encoding ascii
 
           "### Windows installer" >> $env:GITHUB_STEP_SUMMARY
-          "Built ``$($setups[0].Name)`` as ``Windows/Setup.exe``." >> $env:GITHUB_STEP_SUMMARY
+          "Built ``$($setups[0].Name)`` as ``Windows/NicoNavi-Setup.exe``." >> $env:GITHUB_STEP_SUMMARY
           "SHA-256: ``$hash``" >> $env:GITHUB_STEP_SUMMARY
 
       - name: Upload Windows artifact
