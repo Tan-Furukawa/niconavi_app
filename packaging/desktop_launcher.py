@@ -91,9 +91,15 @@ def _show_startup_screen(page: Any, ft: Any, assets_dir: Path) -> Any:
                     color=ft.Colors.LIGHT_BLUE_200,
                 ),
                 ft.Text(
-                    "NicoNaviを起動しています…",
+                    "Starting NicoNavi...",
                     color=ft.Colors.WHITE,
                     size=16,
+                ),
+                ft.Text(
+                    "The first launch may take about 5 minutes.",
+                    color=ft.Colors.WHITE70,
+                    size=13,
+                    text_align=ft.TextAlign.CENTER,
                 ),
             ],
             alignment=ft.MainAxisAlignment.CENTER,
