@@ -83,6 +83,11 @@ def find_debug_start_project() -> Path | None:
     return max(project_files, key=lambda path: path.stat().st_mtime)
 
 
+def window_icon_path() -> str:
+    """Return the native window icon configured by a packaged launcher."""
+    return os.environ.get("NICONAVI_WINDOW_ICON", str(ASSETS_DIR / "favicon.png"))
+
+
 def main(page: ft.Page) -> None:
 
     logger = getLogger("niconavi")
@@ -95,7 +100,7 @@ def main(page: ft.Page) -> None:
     page.padding = 0
     page.title = stores.appearance.niconavi_version
     page.bgcolor = "#ff444444"
-    page.window.icon = "favicon.png"
+    page.window.icon = window_icon_path()
 
     # ! ===================
     def terminate_process() -> None:

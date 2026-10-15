@@ -50,7 +50,7 @@ def _capture_python_output(log_dir: Path) -> TextIO:
     return output
 
 
-def _configure_windows_taskbar() -> None:
+def _configure_windows_identity() -> None:
     if sys.platform != "win32":
         return
 
@@ -60,6 +60,12 @@ def _configure_windows_taskbar() -> None:
     launcher = PACKAGE_ROOT / "launcher.pyw"
     icon = PACKAGE_ROOT / "niconavi.ico"
     relaunch_command = f'"{pythonw}" "{launcher}"'
+
+    # Flet 0.28 only applies the Windows title-bar icon when it receives an
+    # absolute path to an .ico file.  Pass the installer-generated icon to the
+    # application before its first page update instead of falling back to the
+    # Flet fish icon.
+    os.environ["NICONAVI_WINDOW_ICON"] = str(icon)
 
     patch_flet_desktop(
         app_id=WINDOWS_APP_ID,
@@ -101,7 +107,7 @@ def main() -> None:
 
     import flet as ft
 
-    _configure_windows_taskbar()
+    _configure_windows_identity()
 
     from niconavi_app.main import ASSETS_DIR, UPLOAD_ROOT
     from niconavi_app.main import main as niconavi_main
