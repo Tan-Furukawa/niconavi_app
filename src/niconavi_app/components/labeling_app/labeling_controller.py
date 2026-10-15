@@ -127,6 +127,9 @@ class LabelingController:
         self.labeling.image_height.set(0)
         self.labeling.image_display_width.set(0)
         self.labeling.image_display_height.set(0)
+        self.labeling.image_view_pan_x.set(0.0)
+        self.labeling.image_view_pan_y.set(0.0)
+        self.labeling.image_view_zoom.set(1.0)
 
         for attr in (
             "index_map",
@@ -551,6 +554,9 @@ class LabelingController:
         self.labeling.legend_entries.set([])
         self.labeling.custom_colors.set({})
         self.labeling.overlay_alpha.set(0.65)
+        self.labeling.image_view_pan_x.set(0.0)
+        self.labeling.image_view_pan_y.set(0.0)
+        self.labeling.image_view_zoom.set(1.0)
 
         self.stores.labeling_shared.clear_label_selections()
         self.stores.labeling_shared.update_label_colors({})

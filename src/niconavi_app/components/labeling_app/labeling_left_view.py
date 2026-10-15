@@ -19,6 +19,14 @@ def create_labeling_left_container(
 ) -> ft.Container:
     labeling = stores.labeling
 
+    def rendered_dimensions() -> tuple[float | None, float | None]:
+        base_width = labeling.image_display_width.get()
+        base_height = labeling.image_display_height.get()
+        zoom = labeling.image_view_zoom.get()
+        width = max(float(base_width) * zoom, 1.0) if base_width else None
+        height = max(float(base_height) * zoom, 1.0) if base_height else None
+        return width, height
+
     load_status_text = ft.Text(
         value=labeling.load_status_text.get(),
         color=TEXT_COLOR,
@@ -60,17 +68,19 @@ def create_labeling_left_container(
 
     # labeling._loaded.bind(sync_reset_button)
 
+    initial_width, initial_height = rendered_dimensions()
+
     image = ft.Image(
         src_base64=labeling.image_src_base64.get() or "",
-        width=labeling.image_display_width.get() or None,
-        height=labeling.image_display_height.get() or None,
+        width=initial_width,
+        height=initial_height,
         fit=ft.ImageFit.CONTAIN,
     )
 
     image_holder = ft.Container(
         content=image,
-        width=labeling.image_display_width.get() or None,
-        height=labeling.image_display_height.get() or None,
+        width=initial_width,
+        height=initial_height,
         alignment=ft.alignment.center,
         bgcolor=BACKGROUND_COLOR,
     )
@@ -86,8 +96,8 @@ def create_labeling_left_container(
         ft.Container(
             content=gesture,
             alignment=ft.alignment.center,
-            width=labeling.image_display_width.get() or None,
-            height=labeling.image_display_height.get() or None,
+            width=initial_width,
+            height=initial_height,
             bgcolor=BACKGROUND_COLOR,
         )
     )
@@ -107,8 +117,7 @@ def create_labeling_left_container(
 
     def sync_image() -> None:
         image.src_base64 = labeling.image_src_base64.get() or ""
-        display_width = labeling.image_display_width.get()
-        display_height = labeling.image_display_height.get()
+        display_width, display_height = rendered_dimensions()
         image.width = display_width or None
         image.height = display_height or None
         image_holder.width = display_width or None
@@ -123,9 +132,22 @@ def create_labeling_left_container(
         _maybe_update(horizontal_scroll)
         _maybe_update(scroll_wrapper)
 
+    def sync_image_position() -> None:
+        display_width, display_height = rendered_dimensions()
+        offset_x = labeling.image_view_pan_x.get() / (display_width or 1.0)
+        offset_y = labeling.image_view_pan_y.get() / (display_height or 1.0)
+        image_container.offset = ft.Offset(offset_x, offset_y)
+        _maybe_update(image_container)
+
     labeling.image_src_base64.bind(sync_image)
     labeling.image_display_width.bind(sync_image)
     labeling.image_display_height.bind(sync_image)
+    labeling.image_view_zoom.bind(sync_image)
+    labeling.image_display_width.bind(sync_image_position)
+    labeling.image_display_height.bind(sync_image_position)
+    labeling.image_view_zoom.bind(sync_image_position)
+    labeling.image_view_pan_x.bind(sync_image_position)
+    labeling.image_view_pan_y.bind(sync_image_position)
 
     def record_rendered_dimensions(width: float | None, height: float | None) -> None:
         ui_state = stores.labeling_computation_result.setdefault("ui_state", {})
@@ -210,6 +232,7 @@ def create_labeling_left_container(
     sync_load_status()
     # sync_load_button()
     sync_image()
+    sync_image_position()
     sync_visibility()
     sync_app_area()
 

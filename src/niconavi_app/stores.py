@@ -132,6 +132,9 @@ class Labeling:
         self.image_height: State[int] = State(0)
         self.image_display_width: State[int] = State(0)
         self.image_display_height: State[int] = State(0)
+        self.image_view_pan_x: State[float] = State(0.0)
+        self.image_view_pan_y: State[float] = State(0.0)
+        self.image_view_zoom: State[float] = State(1.0)
         self.custom_colors: State[dict[int, str]] = State({})
         self.overlay_alpha: State[float] = State(0.65)
 

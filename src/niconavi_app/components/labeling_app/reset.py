@@ -79,6 +79,9 @@ def reset_filter_tab(stores: Stores) -> None:
     labeling.image_height.set(0)
     labeling.image_display_width.set(0)
     labeling.image_display_height.set(0)
+    labeling.image_view_pan_x.set(0.0)
+    labeling.image_view_pan_y.set(0.0)
+    labeling.image_view_zoom.set(1.0)
 
     labeling_shared = stores.labeling_shared
     labeling_map = labeling_shared.labeling_map

@@ -651,6 +651,10 @@ def restore_filter_tab_view(stores: Stores) -> None:
     # controller = LabelingController(stores=stores)
     # controller.reset_application()
 
+    stores.labeling.image_view_pan_x.set(0.0)
+    stores.labeling.image_view_pan_y.set(0.0)
+    stores.labeling.image_view_zoom.set(1.0)
+
     grain_map = stores.computation_result.grain_map.get()
     raw_maps = stores.computation_result.raw_maps.get()
     grain_boundary = stores.computation_result.grain_boundary.get()

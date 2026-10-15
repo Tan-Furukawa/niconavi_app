@@ -9,6 +9,7 @@ from niconavi_app.components.labeling_app.labeling_controller import LabelingCon
 from niconavi_app.stores import Stores
 from niconavi_app.components.labeling_app.ui_theme import (
     BACKGROUND_COLOR,
+    ICON_BUTTON_STYLE,
     TEXT_COLOR,
     apply_border,
 )
@@ -18,6 +19,13 @@ from niconavi_app.components.common_component import (
     FILTER_TAB_STAGE,
 )
 from niconavi_app.components.log_view import update_logs
+
+
+IMAGE_PAN_STEP = 40.0
+IMAGE_PAN_LIMIT = 600.0
+IMAGE_ZOOM_STEP = 0.25
+IMAGE_ZOOM_MIN = 0.5
+IMAGE_ZOOM_MAX = 3.0
 
 
 def _maybe_update(control: ft.Control) -> None:
@@ -37,7 +45,6 @@ def create_labeling_right_container(
     def section_title(text: str) -> ft.Text:
         return ft.Text(text, color=TEXT_COLOR, weight=ft.FontWeight.W_900)
 
-    status_text = ft.Text(value=labeling.status_text.get(), color=TEXT_COLOR, size=12)
     last_action_text = ft.Text(value=labeling.last_action_text.get(), color=TEXT_COLOR, size=12)
     labeled_stats_text = ft.Text(
         value=labeling.labeled_stats_text.get(), color=TEXT_COLOR, size=12
@@ -47,10 +54,6 @@ def create_labeling_right_container(
         color=TEXT_COLOR,
         size=12,
     )
-
-    def sync_status() -> None:
-        status_text.value = labeling.status_text.get()
-        _maybe_update(status_text)
 
     def sync_last_action() -> None:
         last_action_text.value = labeling.last_action_text.get()
@@ -64,10 +67,141 @@ def create_labeling_right_container(
         prediction_stats_text.value = labeling.prediction_stats_text.get()
         _maybe_update(prediction_stats_text)
 
-    labeling.status_text.bind(sync_status)
     labeling.last_action_text.bind(sync_last_action)
     labeling.labeled_stats_text.bind(sync_labeled_stats)
     labeling.prediction_stats_text.bind(sync_prediction_stats)
+
+    def clamp(value: float, minimum: float, maximum: float) -> float:
+        return max(minimum, min(maximum, value))
+
+    def move_image(delta_x: float, delta_y: float) -> None:
+        labeling.image_view_pan_x.set(
+            clamp(
+                labeling.image_view_pan_x.get() + delta_x,
+                -IMAGE_PAN_LIMIT,
+                IMAGE_PAN_LIMIT,
+            )
+        )
+        labeling.image_view_pan_y.set(
+            clamp(
+                labeling.image_view_pan_y.get() + delta_y,
+                -IMAGE_PAN_LIMIT,
+                IMAGE_PAN_LIMIT,
+            )
+        )
+
+    def zoom_image(delta: float) -> None:
+        labeling.image_view_zoom.set(
+            clamp(
+                labeling.image_view_zoom.get() + delta,
+                IMAGE_ZOOM_MIN,
+                IMAGE_ZOOM_MAX,
+            )
+        )
+
+    def navigation_button(icon, tooltip: str, on_click) -> ft.IconButton:
+        return ft.IconButton(
+            icon=icon,
+            icon_color=ft.Colors.BLACK,
+            icon_size=20,
+            tooltip=tooltip,
+            width=40,
+            height=40,
+            style=ICON_BUTTON_STYLE,
+            on_click=on_click,
+        )
+
+    move_up_button = navigation_button(
+        ft.Icons.ARROW_UPWARD,
+        "Move image up",
+        lambda _e: move_image(0.0, -IMAGE_PAN_STEP),
+    )
+    move_down_button = navigation_button(
+        ft.Icons.ARROW_DOWNWARD,
+        "Move image down",
+        lambda _e: move_image(0.0, IMAGE_PAN_STEP),
+    )
+    move_left_button = navigation_button(
+        ft.Icons.ARROW_BACK,
+        "Move image left",
+        lambda _e: move_image(-IMAGE_PAN_STEP, 0.0),
+    )
+    move_right_button = navigation_button(
+        ft.Icons.ARROW_FORWARD,
+        "Move image right",
+        lambda _e: move_image(IMAGE_PAN_STEP, 0.0),
+    )
+    zoom_in_button = navigation_button(
+        ft.Icons.ADD,
+        "Zoom in",
+        lambda _e: zoom_image(IMAGE_ZOOM_STEP),
+    )
+    zoom_out_button = navigation_button(
+        ft.Icons.REMOVE,
+        "Zoom out",
+        lambda _e: zoom_image(-IMAGE_ZOOM_STEP),
+    )
+
+    navigation_buttons = (
+        move_up_button,
+        move_down_button,
+        move_left_button,
+        move_right_button,
+        zoom_in_button,
+        zoom_out_button,
+    )
+
+    def sync_navigation_buttons() -> None:
+        loaded = labeling._loaded.get()
+        pan_x = labeling.image_view_pan_x.get()
+        pan_y = labeling.image_view_pan_y.get()
+        zoom = labeling.image_view_zoom.get()
+        move_up_button.disabled = not loaded or pan_y <= -IMAGE_PAN_LIMIT
+        move_down_button.disabled = not loaded or pan_y >= IMAGE_PAN_LIMIT
+        move_left_button.disabled = not loaded or pan_x <= -IMAGE_PAN_LIMIT
+        move_right_button.disabled = not loaded or pan_x >= IMAGE_PAN_LIMIT
+        zoom_in_button.disabled = not loaded or zoom >= IMAGE_ZOOM_MAX
+        zoom_out_button.disabled = not loaded or zoom <= IMAGE_ZOOM_MIN
+        for button in navigation_buttons:
+            _maybe_update(button)
+
+    labeling._loaded.bind(sync_navigation_buttons)
+    labeling.image_view_pan_x.bind(sync_navigation_buttons)
+    labeling.image_view_pan_y.bind(sync_navigation_buttons)
+    labeling.image_view_zoom.bind(sync_navigation_buttons)
+
+    arrow_pad = ft.Column(
+        controls=[
+            ft.Row(
+                controls=[
+                    ft.Container(width=40),
+                    move_up_button,
+                    ft.Container(width=40),
+                ],
+                spacing=0,
+            ),
+            ft.Row(
+                controls=[move_left_button, move_down_button, move_right_button],
+                spacing=0,
+            ),
+        ],
+        spacing=0,
+        tight=True,
+    )
+    navigation_controls = ft.Row(
+        controls=[
+            arrow_pad,
+            ft.Container(width=1, height=72, bgcolor=ft.Colors.WHITE24),
+            ft.Column(
+                controls=[zoom_in_button, zoom_out_button],
+                spacing=0,
+                tight=True,
+            ),
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=16,
+    )
 
     boundary_checkbox = ft.Checkbox(
         label=ft.Text("Boundaries", color=ft.Colors.WHITE),
@@ -280,7 +414,6 @@ def create_labeling_right_container(
 
     labeling.labeled_stats_text.bind(sync_done_button_enabled)
 
-    sync_status()
     sync_last_action()
     sync_labeled_stats()
     sync_prediction_stats()
@@ -291,10 +424,11 @@ def create_labeling_right_container(
     sync_overlay_controls()
     sync_overlay_enabled()
     sync_done_button_enabled()
+    sync_navigation_buttons()
 
     controls_column = ft.Column(
         controls=[
-            status_text,
+            navigation_controls,
             ft.Divider(),
             overlay_controls,
             feature_controls,
