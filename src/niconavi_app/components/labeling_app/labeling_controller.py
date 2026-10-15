@@ -7,7 +7,10 @@ import numpy as np
 from scipy.ndimage import binary_erosion
 
 from niconavi_app.components.labeling_app.label_propagation import InteractiveLabelPropagation
-from niconavi_app.components.labeling_app.visualization import render_overlay_base64
+from niconavi_app.components.labeling_app.visualization import (
+    is_point_in_circular_area,
+    render_overlay_base64,
+)
 from niconavi_app.components.labeling_app.label_controls import LabelSelectionPane
 from niconavi_app.components.labeling_app.reset import reset_filter_tab
 # from niconavi_app.components.labeling_app.reset import reset_filter_tab
@@ -320,6 +323,13 @@ class LabelingController:
         display_height = self._effective_dimension(
             control, "height", stored_height, default=original_height
         )
+        if not is_point_in_circular_area(
+            float(e.local_x),
+            float(e.local_y),
+            display_width,
+            display_height,
+        ):
+            return
         scale_x = original_width / display_width if display_width else 1.0
         scale_y = original_height / display_height if display_height else 1.0
         x = int(round(e.local_x * scale_x))

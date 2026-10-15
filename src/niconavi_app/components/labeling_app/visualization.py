@@ -5,7 +5,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 import matplotlib.colors as mcolors
+from matplotlib.patches import Circle
 from typing import Dict, Tuple
+
+
+def is_point_in_circular_area(
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+) -> bool:
+    """Return whether a local point is inside the frame's inscribed circle."""
+    if width <= 0 or height <= 0:
+        return False
+    center_x = width / 2.0
+    center_y = height / 2.0
+    radius = min(width, height) / 2.0
+    return (x - center_x) ** 2 + (y - center_y) ** 2 <= radius**2
 
 
 def _compute_class_map(index_map: np.ndarray, class_ids: np.ndarray):
@@ -101,6 +117,20 @@ def render_overlay_base64(
         figsize = (w / dpi, h / dpi)
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    fig.patch.set_alpha(0.0)
+    ax.set_facecolor((0.0, 0.0, 0.0, 0.0))
+    height, width = class_map.shape
+    circular_clip = Circle(
+        ((width - 1) / 2.0, (height - 1) / 2.0),
+        radius=min(width, height) / 2.0,
+        transform=ax.transData,
+    )
+
+    def show_circular(layer, **kwargs):
+        artist = ax.imshow(layer, **kwargs)
+        artist.set_clip_path(circular_clip)
+        return artist
+
     if show_boundaries is None:
         show_boundaries = True
 
@@ -110,13 +140,13 @@ def render_overlay_base64(
         use_background_image = background_mode != "boundary"
 
     if use_background_image and background_image is not None:
-        ax.imshow(background_image, interpolation="nearest")
+        show_circular(background_image, interpolation="nearest")
     else:
         if effective_boundary_mask is None:
             effective_boundary_mask = (np.asarray(index_map) == 0)
-        ax.imshow(effective_boundary_mask, cmap="gray", interpolation="nearest")
+        show_circular(effective_boundary_mask, cmap="gray", interpolation="nearest")
 
-    ax.imshow(class_map, cmap=cmap, norm=norm, interpolation="nearest")
+    show_circular(class_map, cmap=cmap, norm=norm, interpolation="nearest")
 
     if show_boundaries:
         if effective_boundary_mask is None:
@@ -124,7 +154,7 @@ def render_overlay_base64(
         boundary_overlay = np.zeros((*effective_boundary_mask.shape, 4), dtype=float)
         boundary_overlay[..., :3] = 1.0
         boundary_overlay[..., 3] = np.asarray(effective_boundary_mask, dtype=float) * 0.8
-        ax.imshow(boundary_overlay, interpolation="nearest")
+        show_circular(boundary_overlay, interpolation="nearest")
 
     if highlight_border_mask is not None:
         border = np.asarray(highlight_border_mask, dtype=bool)
@@ -133,12 +163,18 @@ def render_overlay_base64(
         overlay = np.zeros((*border.shape, 4), dtype=float)
         overlay[..., 0] = 1.0
         overlay[..., 3] = border.astype(float)
-        ax.imshow(overlay, interpolation="nearest")
+        show_circular(overlay, interpolation="nearest")
     ax.axis("off")
     ax.set_position([0, 0, 1, 1])
 
     buffer = BytesIO()
-    fig.savefig(buffer, format="png", bbox_inches=None, pad_inches=0)
+    fig.savefig(
+        buffer,
+        format="png",
+        bbox_inches=None,
+        pad_inches=0,
+        transparent=True,
+    )
     plt.close(fig)
     buffer.seek(0)
 
