@@ -48,6 +48,8 @@ dist\windows\NicoNavi-<バージョン>-Setup-x64.exe
 - `-IsccPath`
 
 インストールはユーザー単位で行われるため、管理者権限は要求されません。
+実行に必要なMicrosoft Visual C++ランタイムはアプリに同梱されるため、
+利用者が別途インストールする必要はありません。
 設定、ログ、アップロードファイルなどの変更可能なデータは、
 `%LOCALAPPDATA%\NicoNavi`以下に保存されます。
 
@@ -152,7 +154,9 @@ without compiling the Inno Setup installer. `-PythonVersion`, `-AppVersion`,
 their corresponding defaults.
 
 The installed application is per-user and does not request administrator
-rights. Mutable application data is stored under `%LOCALAPPDATA%\NicoNavi`.
+rights. The required Microsoft Visual C++ runtime is bundled with the
+application, so users do not need to install it separately. Mutable application
+data is stored under `%LOCALAPPDATA%\NicoNavi`.
 
 ### Build with GitHub Actions
 

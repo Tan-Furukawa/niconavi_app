@@ -11,6 +11,73 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+function Copy-VcRuntimeLibraries {
+    param([Parameter(Mandatory = $true)][string]$Destination)
+
+    # Some binary wheels (notably scikit-image) link against MSVCP140.dll.
+    # python-build-standalone includes the Python runtime but does not guarantee
+    # that the C++ runtime is present, and a build-machine smoke test can find
+    # it in System32 even when the destination PC cannot. Prefer Microsoft's
+    # redistributable directory, then fall back to the build machine's current
+    # system runtime for app-local deployment.
+    $RuntimeCandidates = @()
+    $ConfiguredRedist = [Environment]::GetEnvironmentVariable("VCToolsRedistDir")
+    if ($ConfiguredRedist -and (Test-Path -LiteralPath $ConfiguredRedist)) {
+        $RuntimeCandidates += Get-ChildItem -LiteralPath $ConfiguredRedist `
+            -Filter "msvcp140.dll" -File -Recurse -ErrorAction SilentlyContinue
+    }
+
+    $ProgramFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
+    $VsWhere = Join-Path $ProgramFilesX86 "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path -LiteralPath $VsWhere) {
+        $VsInstallPath = & $VsWhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Redist.14.Latest `
+            -property installationPath
+        if ($VsInstallPath) {
+            $VsInstallPath = $VsInstallPath.Trim()
+            $VcRedistRoot = Join-Path $VsInstallPath "VC\Redist\MSVC"
+            if (Test-Path -LiteralPath $VcRedistRoot) {
+                $RuntimeCandidates += Get-ChildItem -LiteralPath $VcRedistRoot `
+                    -Filter "msvcp140.dll" -File -Recurse -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    $RuntimeSource = $RuntimeCandidates |
+        Where-Object { $_.DirectoryName -match "\\x64\\Microsoft\.VC\d+\.CRT$" } |
+        Sort-Object FullName -Descending |
+        Select-Object -First 1
+
+    if ($RuntimeSource) {
+        Copy-Item -Path (Join-Path $RuntimeSource.DirectoryName "*.dll") `
+            -Destination $Destination -Force
+    }
+    else {
+        $SystemDirectory = [Environment]::SystemDirectory
+        $RuntimeNames = @(
+            "concrt140.dll",
+            "msvcp140.dll",
+            "msvcp140_1.dll",
+            "msvcp140_2.dll",
+            "vccorlib140.dll",
+            "vcomp140.dll",
+            "vcruntime140.dll",
+            "vcruntime140_1.dll"
+        )
+        foreach ($RuntimeName in $RuntimeNames) {
+            $RuntimePath = Join-Path $SystemDirectory $RuntimeName
+            if (Test-Path -LiteralPath $RuntimePath) {
+                Copy-Item -LiteralPath $RuntimePath -Destination $Destination -Force
+            }
+        }
+    }
+
+    $RequiredRuntime = Join-Path $Destination "msvcp140.dll"
+    if (-not (Test-Path -LiteralPath $RequiredRuntime)) {
+        throw "MSVCP140.dll was not found. Install the Microsoft Visual C++ 2015-2022 Redistributable or Visual Studio Build Tools before building."
+    }
+}
+
 $PackagingDirectory = Split-Path -Parent $PSScriptRoot
 $ProjectRoot = (Resolve-Path (Join-Path $PackagingDirectory "..")).Path
 
@@ -85,6 +152,9 @@ try {
         throw "The standalone runtime does not contain python.exe."
     }
 
+    Write-Host "==> Bundling the Microsoft Visual C++ runtime"
+    Copy-VcRuntimeLibraries -Destination $RuntimeDirectory
+
     Write-Host "==> Exporting dependencies from uv.lock"
     Push-Location $ProjectRoot
     try {
@@ -117,6 +187,8 @@ try {
     $SmokeData = Join-Path $BuildRoot "smoke-data"
     New-Item -ItemType Directory -Force -Path $SmokeData | Out-Null
     $env:FLET_UPLOAD_DIR = Join-Path $SmokeData "uploads"
+    & $StagePython -c 'from skimage.feature import hessian_matrix; print("scikit-image native extension: OK")'
+    if ($LASTEXITCODE -ne 0) { throw "The bundled scikit-image native extension failed its import test." }
     & $StagePython -c 'import niconavi_app.main; print("NicoNavi import: OK")'
     if ($LASTEXITCODE -ne 0) { throw "The packaged application failed its import test." }
     $env:LOCALAPPDATA = $SmokeData
