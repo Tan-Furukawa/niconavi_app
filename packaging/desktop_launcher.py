@@ -11,8 +11,9 @@ import os
 import sys
 import traceback
 from datetime import datetime
+from importlib.util import find_spec
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 
 APP_NAME = "NicoNavi"
@@ -48,6 +49,68 @@ def _capture_python_output(log_dir: Path) -> TextIO:
     if sys.stderr is None:
         sys.stderr = output
     return output
+
+
+def _find_assets_dir() -> Path:
+    """Locate packaged assets without importing the heavy application module."""
+    packaged_assets = LIB_DIR / "niconavi_app" / "assets"
+    if packaged_assets.is_dir():
+        return packaged_assets
+
+    package_spec = find_spec("niconavi_app")
+    if package_spec and package_spec.submodule_search_locations:
+        assets_dir = Path(next(iter(package_spec.submodule_search_locations))) / "assets"
+        if assets_dir.is_dir():
+            return assets_dir.resolve()
+
+    raise FileNotFoundError("Could not locate the NicoNavi assets directory.")
+
+
+def _show_startup_screen(page: Any, ft: Any, assets_dir: Path) -> Any:
+    """Display a client-side animation while Python imports the application."""
+    page.padding = 0
+    page.title = APP_NAME
+    page.bgcolor = "#ff444444"
+    page.window.icon = os.environ.get(
+        "NICONAVI_WINDOW_ICON", str(assets_dir / "favicon.png")
+    )
+
+    startup_screen = ft.Container(
+        content=ft.Column(
+            [
+                ft.Image(
+                    src="favicon.png",
+                    width=120,
+                    height=120,
+                    fit=ft.ImageFit.CONTAIN,
+                ),
+                ft.ProgressRing(
+                    width=36,
+                    height=36,
+                    stroke_width=4,
+                    color=ft.Colors.LIGHT_BLUE_200,
+                ),
+                ft.Text(
+                    "NicoNaviを起動しています…",
+                    color=ft.Colors.WHITE,
+                    size=16,
+                ),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=20,
+            tight=True,
+        ),
+        alignment=ft.alignment.center,
+        bgcolor="#ff444444",
+        left=0,
+        top=0,
+        right=0,
+        bottom=0,
+    )
+    page.overlay.append(startup_screen)
+    page.update()
+    return startup_screen
 
 
 def _configure_windows_identity() -> None:
@@ -108,18 +171,27 @@ def main() -> None:
     import flet as ft
 
     _configure_windows_identity()
-
-    from niconavi_app.main import ASSETS_DIR, UPLOAD_ROOT
-    from niconavi_app.main import main as niconavi_main
+    assets_dir = _find_assets_dir()
 
     def run_session(page: ft.Page) -> None:
         _write_diagnostic(log_dir, "launcher.log", "Flet session connected")
+        startup_screen = _show_startup_screen(page, ft, assets_dir)
+        _write_diagnostic(log_dir, "launcher.log", "Startup screen displayed")
         try:
+            # Importing the application pulls in the scientific Python stack.
+            # Keep it deferred until the client can animate the startup screen.
+            from niconavi_app.main import main as niconavi_main
+
+            _write_diagnostic(log_dir, "launcher.log", "Application modules loaded")
             niconavi_main(page)
+            page.overlay.remove(startup_screen)
+            page.update()
         except BaseException:  # noqa: BLE001 - keep pythonw failures observable
             details = traceback.format_exc()
             _write_diagnostic(log_dir, "startup-error.log", details)
             try:
+                if startup_screen in page.overlay:
+                    page.overlay.remove(startup_screen)
                 page.clean()
                 page.title = f"{APP_NAME} - startup error"
                 page.add(
@@ -156,8 +228,8 @@ def main() -> None:
         target=run_session,
         name=APP_NAME,
         view=ft.AppView.FLET_APP,
-        upload_dir=str(UPLOAD_ROOT),
-        assets_dir=str(ASSETS_DIR),
+        upload_dir=str(upload_dir),
+        assets_dir=str(assets_dir),
     )
     captured_output.flush()
 
