@@ -8,6 +8,7 @@
 #!------------------------------------------------------
 
 from niconavi_app.app_config import CPO_NORMALIZE_PERCENTILE
+from niconavi_app.version import APP_VERSION_LABEL
 from niconavi_app.state import State
 from niconavi_app.niconavi.image.type import Color, RGBPicture, MonoColorPicture, D1RGB_Array
 from typing import TypedDict, Optional, Literal, cast, Any
@@ -52,7 +53,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 # ------------------------------------------------------------
 class Appearance:
     def __init__(self) -> None:
-        self.niconavi_version = "NicoNavi v0.2.2"
+        self.niconavi_version = APP_VERSION_LABEL
         self.tabs_width = 400
         self.tab_padding = 20
         self.progress_bar_height = 50
