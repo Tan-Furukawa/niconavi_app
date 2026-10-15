@@ -496,8 +496,8 @@ def make_grain_stat_method_radio(
         active_value_state=method_state,
         content=ft.Row(
             [
-                CustomRadio(value="median", label="median"),
-                CustomRadio(value="mean", label="mean"),
+                CustomRadio(value="median", label="Median"),
+                CustomRadio(value="mean", label="Mean"),
             ],
             spacing=6,
         ),
@@ -576,7 +576,7 @@ def make_cip_start_button(
     stores: Stores, page: Optional[Page], *, logger: Logger
 ) -> CustomExecuteButton:
     return CustomExecuteButton(
-        "calculate",
+        "Calculate",
         on_click=lambda e: onclick_cip_start_button(stores, e, page, logger=logger),
         enabled=ReactiveState(
             lambda: stores.ui.computing_is_stop.get(),
@@ -587,7 +587,7 @@ def make_cip_start_button(
 
 def make_cip_normalize_90_checkbox(stores: Stores) -> CustomReactiveCheckbox:
     return CustomReactiveCheckbox(
-        label="90° normalize",
+        label="Normalize to 90°",
         value=stores.ui.analysis_tab.cip_normalize_90,
         on_change=lambda e: stores.ui.analysis_tab.cip_normalize_90.set(
             e.control.value
@@ -608,7 +608,7 @@ def make_cip_normalize_percentile_input(stores: Stores) -> ft.Row:
     )
     return ReactiveRow(
         [
-            CustomText("percentile"),
+            CustomText("Percentile"),
             input,
             CustomText("%"),
         ],
@@ -636,7 +636,7 @@ def make_CIP_no_and_ne_input(
 
 def make_scatter_origin_checkbox(stores: Stores) -> CustomReactiveCheckbox:
     return CustomReactiveCheckbox(
-        label="origin",
+        label="Origin",
         visible=stores.ui.analysis_tab.scatter_show_regression,
         value=stores.ui.analysis_tab.scatter_regression_origin,
         on_change=lambda e: stores.ui.analysis_tab.scatter_regression_origin.set(
@@ -647,7 +647,7 @@ def make_scatter_origin_checkbox(stores: Stores) -> CustomReactiveCheckbox:
 
 def make_scatter_regression_checkbox(stores: Stores) -> CustomReactiveCheckbox:
     return CustomReactiveCheckbox(
-        label="regression",
+        label="Regression",
         value=stores.ui.analysis_tab.scatter_show_regression,
         on_change=lambda e: stores.ui.analysis_tab.scatter_show_regression.set(
             e.control.value
@@ -715,7 +715,7 @@ def make_cip_color_mode_input(stores: Stores) -> ReactiveCustomDropDown:
 def make_cip_display_points_input(stores: Stores) -> CustomReactiveCheckbox:
 
     return CustomReactiveCheckbox(
-        label="display points",
+        label="Display points",
         value=stores.ui.analysis_tab.cip_display_points,
         on_change=lambda e: stores.ui.analysis_tab.cip_display_points.set(
             e.control.value
@@ -829,14 +829,14 @@ class AnalysisTab(ft.Container):
         drop_scatter_target_y = make_drop_scatter_target_y(stores)
         scatter_x_stat_method = make_grain_stat_method_radio(
             stores,
-            label="x value",
+            label="X value",
             target_state=stores.ui.analysis_tab.scatter_target_x,
             method_state=stores.ui.analysis_tab.scatter_x_stat_method,
             visible=visible_scatter,
         )
         scatter_y_stat_method = make_grain_stat_method_radio(
             stores,
-            label="y value",
+            label="Y value",
             target_state=stores.ui.analysis_tab.scatter_target_y,
             method_state=stores.ui.analysis_tab.scatter_y_stat_method,
             visible=visible_scatter,
@@ -928,7 +928,7 @@ class AnalysisTab(ft.Container):
                                     ]
                                 ),
                                 CustomReactiveCheckbox(
-                                    label="flip",
+                                    label="Flip",
                                     value=stores.ui.analysis_tab.rose_flip,
                                     on_change=lambda e: (
                                         stores.ui.analysis_tab.rose_flip.set(
@@ -991,19 +991,19 @@ class AnalysisTab(ft.Container):
                         ReactiveColumn(
                             [
                                 CustomReactiveText(
-                                    "scatter plotted by",
+                                    "Scatter variables",
                                     visible=visible_scatter,
                                 ),
                                 ft.Row(
                                     [
-                                        CustomText("x:"),
+                                        CustomText("X"),
                                         drop_scatter_target_x,
                                     ]
                                 ),
                                 scatter_x_stat_method,
                                 ft.Row(
                                     [
-                                        CustomText("y:"),
+                                        CustomText("Y"),
                                         drop_scatter_target_y,
                                     ]
                                 ),
@@ -1015,7 +1015,7 @@ class AnalysisTab(ft.Container):
                         ),
                         ReactiveColumn(
                             [
-                                CustomText("refractive indices (default: quartz)"),
+                                CustomText("Refractive indices (quartz default)"),
                                 ft.Row([CustomText("ω ="), no, CustomText(" ε ="), ne]),
                                 cip_normalize_90,
                                 cip_normalize_percentile,
@@ -1039,7 +1039,7 @@ class AnalysisTab(ft.Container):
                     [
                         ft.Row(
                             [
-                                CustomText("Plots for each"),
+                                CustomText("Group by"),
                                 pixel_or_grain_radio,
                             ]
                         ),
@@ -1047,13 +1047,13 @@ class AnalysisTab(ft.Container):
                         make_cip_contour_num(stores),
                         ft.Row(
                             [
-                                CustomText("Color theme:"),
+                                CustomText("Color theme"),
                                 cip_theme,
                             ]
                         ),
                         ft.Row(
                             [
-                                CustomText("Color mode:"),
+                                CustomText("Color mode"),
                                 cip_color_mode,
                             ]
                         ),

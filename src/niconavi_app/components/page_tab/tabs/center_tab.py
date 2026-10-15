@@ -198,7 +198,7 @@ class CenterTab(ft.Container):
             )
 
         execute_button = CustomExecuteButton(
-            "▶ continue",
+            "Continue",
             on_click=lambda e: handle_continue(),
             enabled=ReactiveState(
                 lambda: (
@@ -232,10 +232,10 @@ class CenterTab(ft.Container):
             [
                 ft.Column(
                     [
-                        CustomText("Set the rotation center before building angle maps."),
+                        CustomText("Rotation center"),
                         ft.Row(
                             [
-                                CustomText("cx:"),
+                                CustomText("X"),
                                 make_REMOVE_counter_button(
                                     stores, stores.computation_result.center_int_x
                                 ),
@@ -251,7 +251,7 @@ class CenterTab(ft.Container):
                         # ),
                         ft.Row(
                             [
-                                CustomText("cy:"),
+                                CustomText("Y"),
                                 make_REMOVE_counter_button(
                                     stores, stores.computation_result.center_int_y
                                 ),

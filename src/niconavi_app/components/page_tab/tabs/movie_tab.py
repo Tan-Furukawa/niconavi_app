@@ -514,12 +514,13 @@ class MovieTab(ft.Container):
         logger = getLogger("niconavi").getChild(__name__)
 
         reset_button = CustomExecuteButton(
-            "reset all",
+            "Reset",
             on_click=lambda e: confirm_action(
                 page,
                 "Reset project?",
-                "This will clear the loaded project and all later calculation results.",
+                "Loaded data and analysis results will be deleted.",
                 lambda: reset_button_click(stores, logger=logger),
+                confirm_label="Reset",
             ),
             enabled=ReactiveState(
                 lambda: stores.ui.computing_is_stop.get() and stores.ui.once_start.get(),
@@ -529,7 +530,7 @@ class MovieTab(ft.Container):
         )
 
         recalculate_maps = CustomExecuteButton(
-            "▶ recalulate",
+            "Recalculate",
             on_click=lambda e: confirm_discard_downstream(
                 page,
                 stores,
@@ -556,7 +557,7 @@ class MovieTab(ft.Container):
         )
 
         execute_button = CustomExecuteButton(
-            "▶ start",
+            "Start",
             on_click=lambda e: load_data_clicked(stores, logger=logger),
             enabled=ReactiveState(
                 lambda: stores.ui.computing_is_stop.get()
@@ -671,7 +672,7 @@ class MovieTab(ft.Container):
         # can only be chosen before "start" - afterwards the checkbox turns
         # into a read-only line saying what the run used.
         white_balance_checkbox = make_solidable_checkbox(
-            "gray-world white balance",
+            "Gray-world white balance",
             stores.computation_result.apply_white_balance,
             lambda: not stores.ui.once_start.get(),
             [stores.ui.once_start],
@@ -709,21 +710,21 @@ class MovieTab(ft.Container):
             [
                 ft.Row(
                     [
-                        CustomText("XPL Rotated", weight=ft.FontWeight.W_900),
-                        CustomText("*Required", italic=False, size=12),
+                        CustomText("Rotated XPL", weight=ft.FontWeight.W_900),
+                        CustomText("Required", italic=False, size=12),
                         cross_polarized_pick_files_button,
                     ]
                 ),
                 ft.Row(
                     [
-                        CustomText("thin section thickness ="),
+                        CustomText("Section thickness"),
                         thickness_input,
                         CustomText("mm"),
                     ]
                 ),
                 ft.Row(
                     [
-                        CustomText("max retardation ="),
+                        CustomText("Maximum retardation"),
                         xpl_max_R,
                         CustomText("nm"),
                     ]
@@ -732,14 +733,14 @@ class MovieTab(ft.Container):
                 ft.Divider(),
                 ft.Row(
                     [
-                        CustomText("XPL + λ-Plate Rotated", weight=ft.FontWeight.W_900),
-                        CustomText("*Optional", italic=False, size=12),
+                        CustomText("Rotated XPL + λ plate", weight=ft.FontWeight.W_900),
+                        CustomText("Optional", italic=False, size=12),
                         retardation_plate_pick_files_button,
                     ]
                 ),
                 ft.Row(
                     [
-                        CustomText("max retardation ="),
+                        CustomText("Maximum retardation"),
                         xpl_pol_max_R,
                         CustomText("nm"),
                     ]
@@ -754,25 +755,25 @@ class MovieTab(ft.Container):
                 ft.Divider(),
                 ft.Row(
                     [
-                        CustomText("XPL + λ-Plate 0°/45°", weight=ft.FontWeight.W_900),
-                        CustomText("*Optional; requires XPL+λ", italic=False, size=12),
+                        CustomText("XPL + λ plate (0°/45°)", weight=ft.FontWeight.W_900),
+                        CustomText("Optional", italic=False, size=12),
                     ]
                 ),
                 ft.Row(
                     [
-                        CustomText("0° tilt"),
+                        CustomText("0° tilted image"),
                         tilt_image0_files_button,
                     ]
                 ),
                 ft.Row(
                     [
-                        CustomText("45° tilt:"),
+                        CustomText("45° tilted image"),
                         tilt_image45_files_button,
                     ]
                 ),
                 ft.Row(
                     [
-                        CustomText("45° not tilt:"),
+                        CustomText("45° reference image"),
                         image45_files_button,
                     ]
                 ),

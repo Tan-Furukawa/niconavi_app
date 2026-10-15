@@ -338,9 +338,9 @@ def on_result_load_project_file(
                 page.close(dlg_modal)
 
             dlg_modal = make_confirmation_dialog(
-                "Please confirm",
-                "Loading a project will discard the current session. Continue?",
-                [("Yes", handle_yes), ("No", handle_no)],
+                "Load project?",
+                "Unsaved changes will be discarded.",
+                [("Cancel", handle_no), ("Load", handle_yes)],
             )
 
             page.open(dlg_modal)
@@ -582,10 +582,10 @@ class niconaviAppBar:
                     ),
                 ),
                 make_file_menu_item(
-                    text="Save image as PDF", on_click=handle_save_image_as_pdf
+                    text="Export image (PDF)", on_click=handle_save_image_as_pdf
                 ),
                 make_file_menu_item(
-                    text="Save grain information as CSV", on_click=handle_save_grain
+                    text="Export grain data", on_click=handle_save_grain
                 ),
             ]
 

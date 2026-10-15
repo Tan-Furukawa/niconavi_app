@@ -395,7 +395,7 @@ def create_labeling_right_container(
         )
 
     done_button = CustomExecuteButton(
-        text="Done",
+        text="Save",
         icon=ft.Icons.CHECK,
         on_click=on_done_clicked,
     )

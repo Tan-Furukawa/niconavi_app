@@ -505,7 +505,7 @@ def make_continue_button_visible(
     )
 
     continue_button = CustomExecuteButton(
-        "▶ Continue",
+        "Continue",
         enabled=continue_button_visible,
         on_click=lambda e: continue_button_click(stores, e, logger=logger),
     )
@@ -617,15 +617,16 @@ class GrainTab(ft.Container):
             # Reset throws away the cleaning and segmentation done on this tab,
             # so it always asks - unlike the steps that only cost the tabs after
             # them, there is something to lose even with no later tab open.
-            message = "This clears the cleaned angle map and the grain boundary registered from it."
+            message = "The cleaned angle map and registered grain boundaries will be deleted."
             downstream = describe_downstream_reset(stores, MAP_TAB_STAGE)
             if downstream:
                 message = f"{message} {downstream}"
             confirm_action(
                 page,
-                "Reset the angle map?",
+                "Reset angle map?",
                 message,
                 lambda: reset_angle_map_button_click(stores, e, logger=logger),
+                confirm_label="Reset",
             )
 
         angle_map_legend_visible = ReactiveState(
@@ -656,7 +657,7 @@ class GrainTab(ft.Container):
         content = ft.Column(
             [
                 angle_map_legend,
-                CustomText("Clean the angle map before segmentation."),
+                CustomText("Angle-map cleanup"),
                 ft.Row(
                     [
                         make_map_action_button(
@@ -675,25 +676,25 @@ class GrainTab(ft.Container):
                         ),
                     ]
                 ),
-                CustomText("Segment similar angle regions into grains."),
+                CustomText("Grain segmentation"),
                 ft.Row(
                     [
                         make_map_action_button(
-                            "Segmentation",
+                            "Segment",
                             on_click=lambda e: segmentation_button_click(
                                 stores, e, logger=logger
                             ),
                             enabled=segmentation_enabled,
                         ),
-                        CustomText("angle:"),
+                        CustomText("Angle"),
                         segmentation_angle,
                     ]
                 ),
-                CustomText("Fill thin dark boundaries after segmentation."),
+                CustomText("Boundary fill"),
                 ft.Row(
                     [
                         make_map_action_button(
-                            "Fill boundary",
+                            "Fill",
                             on_click=lambda e: fill_boundary_button_click(
                                 stores, e, logger=logger
                             ),
@@ -712,11 +713,11 @@ class GrainTab(ft.Container):
                         ),
                     ]
                 ),
-                CustomText("Register or reset the map-based grain boundary."),
+                CustomText("Grain boundaries"),
                 ft.Row(
                     [
                         make_map_action_button(
-                            "OK",
+                            "Apply",
                             on_click=lambda e: ok_button_click(stores, e, logger=logger),
                             enabled=ok_enabled,
                         ),
@@ -727,11 +728,11 @@ class GrainTab(ft.Container):
                         ),
                     ]
                 ),
-                CustomText("Continue to filter labeling after registering boundaries."),
+                CustomText("Filter labeling"),
                 ft.Row(
                     [
                         make_map_action_button(
-                            "▶ Continue",
+                            "Continue",
                             on_click=lambda e: confirm_discard_downstream(
                                 page,
                                 stores,

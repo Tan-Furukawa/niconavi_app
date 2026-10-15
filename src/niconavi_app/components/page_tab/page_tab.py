@@ -37,7 +37,7 @@ class PageTabs(ft.Container):
         if ENABLE_FUNCTION_TAB:
             function_tabs.append(
                 ReactiveTab(
-                    text="function",
+                    text="Function",
                     content=FunctionTab(page, stores),
                 )
             )
@@ -56,11 +56,11 @@ class PageTabs(ft.Container):
                     unselected_label_color=ft.Colors.WHITE,
                     tabs=[
                         ReactiveTab(
-                            text="video",
+                            text="Video",
                             content=MovieTab(page, stores),
                         ),
                         ReactiveTab(
-                            text="center",
+                            text="Center",
                             # tab_content=ft.Icon(ft.Icons.SEARCH),
                             content=CenterTab(page, stores),
                             # icon=ft.Icons.ADJUST,
@@ -70,7 +70,7 @@ class PageTabs(ft.Container):
                             ),
                         ),
                         ReactiveTab(
-                            text="map",
+                            text="Map",
                             content=GrainTab(page, stores),
                             visible=ReactiveState(
                                 lambda: stores.ui.progress.get() >= 2,
@@ -88,7 +88,7 @@ class PageTabs(ft.Container):
                         #     # icon=ft.Icons.SETTINGS,
                         # ),
                         ReactiveTab(
-                            text="filter",
+                            text="Filter",
                             content=FilterTab(page, stores),
                             visible=ReactiveState(
                                 lambda: stores.ui.progress.get() >= 3,
@@ -106,7 +106,7 @@ class PageTabs(ft.Container):
                             # ),
                         ),
                         ReactiveTab(
-                            text="analysis",
+                            text="Analysis",
                             content=AnalysisTab(page, stores),
                             visible=ReactiveState(
                                 lambda: stores.ui.progress.get() >= 4,

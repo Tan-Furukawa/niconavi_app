@@ -57,6 +57,8 @@ def confirm_action(
     title: str,
     message: str,
     on_confirm: Callable[[], None],
+    *,
+    confirm_label: str = "OK",
 ) -> None:
     def handle_cancel(e: ft.ControlEvent) -> None:
         page.close(dialog)
@@ -68,7 +70,7 @@ def confirm_action(
     dialog = make_confirmation_dialog(
         title,
         message,
-        [("Cancel", handle_cancel), ("Continue", handle_confirm)],
+        [("Cancel", handle_cancel), (confirm_label, handle_confirm)],
     )
     page.open(dialog)
 
@@ -98,9 +100,9 @@ def describe_downstream_reset(stores: Stores, stage: int) -> str:
     if not names:
         return ""
     if len(names) == 1:
-        return f"The {names[0]} tab goes back to its initial state."
+        return f"This resets the {names[0]} tab."
     listed = f"{', '.join(names[:-1])} and {names[-1]}"
-    return f"The {listed} tabs go back to their initial state."
+    return f"This resets the {listed} tabs."
 
 
 def confirm_discard_downstream(
@@ -123,7 +125,13 @@ def confirm_discard_downstream(
         on_confirm()
         return
 
-    confirm_action(page, f"{action}?", message, on_confirm)
+    confirm_action(
+        page,
+        f"{action}?",
+        message,
+        on_confirm,
+        confirm_label=action,
+    )
 
 
 class CustomReactiveText(ReactiveText):

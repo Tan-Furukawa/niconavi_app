@@ -138,7 +138,7 @@ def main(page: ft.Page) -> None:
     log_view = LogView(stores, column)
 
     log_view_header = ft.Container(
-        content=CustomText("output"),
+        content=CustomText("Output"),
         height=25,
         padding=ft.padding.only(left=20),
         width=stores.appearance.tabs_width,
@@ -146,7 +146,7 @@ def main(page: ft.Page) -> None:
     )
 
     image_selector_header = ft.Container(
-        content=CustomText("images"),
+        content=CustomText("Images"),
         height=25,
         width=200,
         margin=0,
