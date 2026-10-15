@@ -5,7 +5,6 @@ import numpy as np
 from niconavi_app.stores import (
     ComputationResult,
     Stores,
-    as_ComputationResult,
     save_in_ComputationResultState,
 )
 from niconavi_app.niconavi.tools.str_parser import parse_larger_than_0
@@ -53,7 +52,7 @@ from niconavi_app.components.common_component import (
 )
 from niconavi_app.components.log_view import update_logs
 from niconavi_app.download_manager import register_download
-from niconavi_app.project_io import load_project_archive, save_project_atomic
+from niconavi_app.project_io import load_project_archive
 
 
 from datetime import datetime
@@ -347,6 +346,15 @@ def restore_ui_selection(
 ) -> None:
     if not isinstance(ui_state, dict):
         return
+    stored_pixel_size = ui_state.get("one_pixel", 0)
+    if stored_pixel_size is None:
+        stores.ui.one_pixel.set(None)
+    else:
+        try:
+            parsed_pixel_size = float(stored_pixel_size)
+        except (TypeError, ValueError):
+            parsed_pixel_size = 0.0
+        stores.ui.one_pixel.set(parsed_pixel_size if parsed_pixel_size > 0 else 0)
     selected_index = int(ui_state.get("selected_index", fallback_progress))
     if selected_index <= fallback_progress:
         switch_tab_index(stores, selected_index)
@@ -508,38 +516,10 @@ class niconaviAppBar:
 
         self.page = page
 
-        def save_project_to_current_path() -> bool:
-            current_path = stores.ui.current_project_path.get()
-            if not current_path:
-                return False
-            try:
-                save_project_atomic(
-                    Path(current_path),
-                    as_ComputationResult(stores.computation_result),
-                    ui_state=collect_project_ui_state(stores),
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Failed to save project: %s", exc)
-                update_logs(
-                    stores,
-                    ("Could not save the project.", "err"),
-                    logger=logger,
-                )
-                return True
-            update_logs(
-                stores,
-                (f"Saved project to {current_path}.", "ok"),
-                logger=logger,
-            )
-            return True
-
         def handle_save_project(_: ft.ControlEvent) -> None:
             if page.web:
                 filename = f"output_{get_current_datetime_str()}.niconavi"
                 download_project_file(page, stores, filename, logger=logger)
-                return
-
-            if save_project_to_current_path():
                 return
 
             handle_save_project_as(_)
@@ -647,7 +627,7 @@ class niconaviAppBar:
 
                 ft.Row(
                     [
-                        CustomText("Image width:"),
+                        CustomText("Width:"),
                         make_image_width_input(stores),
                         CustomText("μm"),
                     ]

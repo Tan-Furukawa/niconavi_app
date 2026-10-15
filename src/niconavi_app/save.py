@@ -42,6 +42,7 @@ GRAIN_LIST_EXCLUDE_KEYS: set[str] = {"area_shape", "exQuality"}
 def collect_project_ui_state(stores: Stores) -> dict[str, Any]:
     map_tab = stores.ui.map_tab
     return {
+        "one_pixel": stores.ui.one_pixel.get(),
         "selected_index": stores.ui.selected_index.get(),
         "selected_button_at_filter_tab": stores.ui.selected_button_at_filter_tab.get(),
         "selected_button_at_grain_tab": stores.ui.selected_button_at_grain_tab.get(),
