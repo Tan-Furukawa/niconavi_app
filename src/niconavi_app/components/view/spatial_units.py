@@ -52,10 +52,12 @@ def _format_micrometer_tick(value: float, scale: float) -> str:
 
 def apply_micrometer_axis(ax: Axes, stores: Stores) -> None:
     """
-    Re-labels the axes in micrometers if the pixel size is known.
+    Labels image axes in micrometers when calibrated, otherwise in pixels.
     """
     scale = get_pixel_to_micrometer_scale(stores)
     if scale is None:
+        ax.set_xlabel("px")
+        ax.set_ylabel("px")
         return
 
     formatter = FuncFormatter(lambda value, pos: _format_micrometer_tick(value, scale))

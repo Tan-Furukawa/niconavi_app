@@ -688,6 +688,7 @@ class GrainTab(ft.Container):
                         ),
                         CustomText("Angle"),
                         segmentation_angle,
+                        CustomText("deg"),
                     ]
                 ),
                 CustomText("Boundary fill"),

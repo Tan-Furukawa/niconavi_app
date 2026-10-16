@@ -1,9 +1,11 @@
 import cv2
 import numpy as np
+from types import SimpleNamespace
 
 from niconavi_app.components.labeling_app.label_propagation import (
     InteractiveLabelPropagation,
 )
+import niconavi_app.components.labeling_app.labeling_controller as controller_module
 from niconavi_app.components.labeling_app.labeling_controller import LabelingController
 from niconavi_app.niconavi.grain_segmentation.grain_segmentation import (
     COMPONENT_FEATURE_COLUMNS,
@@ -12,6 +14,23 @@ from niconavi_app.niconavi.grain_segmentation.grain_segmentation import (
     component_info_to_feature_matrix,
 )
 from niconavi_app.stores import Stores
+
+
+class _ClassifierStub:
+    def __init__(self) -> None:
+        self.labels: list[tuple[int, int]] = []
+
+    def set_label(self, region_index: int, *, class_id: int) -> None:
+        self.labels.append((region_index, class_id))
+
+    def propagate(self) -> None:
+        pass
+
+    def current_predictions(self) -> np.ndarray:
+        return np.array([0, 1], dtype=np.int32)
+
+    def current_probabilities(self) -> np.ndarray:
+        return np.ones((2, 1), dtype=np.float64)
 
 
 def test_default_labeling_features_include_size_but_not_position() -> None:
@@ -130,3 +149,88 @@ def test_size_feature_uses_logarithmic_component_area() -> None:
     classifier.propagate()
 
     assert classifier.current_predictions()[1:5].tolist() == [1, 1, 2, 2]
+
+
+def test_image_tap_waits_for_confirmation_when_analysis_exists(monkeypatch) -> None:
+    stores = Stores()
+    stores.ui.progress.set(4)
+    stores.labeling._loaded.set(True)
+    stores.labeling.labels.set({1: "Quartz"})
+    stores.labeling.current_class.set(1)
+    stores.labeling.labeling_param.get().index_map.set(
+        np.ones((4, 4), dtype=np.int32)
+    )
+    stores.labeling.labeling_param.get().predictions.set(
+        np.zeros(2, dtype=np.int32)
+    )
+
+    controller = LabelingController(stores)
+    classifier = _ClassifierStub()
+    controller.clf = classifier
+    monkeypatch.setattr(
+        controller, "_compute_display_predictions", lambda: np.array([0, 1])
+    )
+    monkeypatch.setattr(controller, "refresh_visuals", lambda **_kwargs: None)
+
+    reset_calls: list[bool] = []
+    monkeypatch.setattr(
+        controller,
+        "_reset_analysis_for_label_change",
+        lambda: reset_calls.append(True),
+    )
+    pending_confirmation: dict[str, object] = {}
+
+    def capture_confirmation(page, stores, stage, action, on_confirm) -> None:
+        pending_confirmation.update(
+            page=page,
+            stores=stores,
+            stage=stage,
+            action=action,
+            on_confirm=on_confirm,
+        )
+
+    monkeypatch.setattr(
+        controller_module, "confirm_discard_downstream", capture_confirmation
+    )
+    page = object()
+    event = SimpleNamespace(
+        local_x=2.0,
+        local_y=2.0,
+        control=SimpleNamespace(width=4.0, height=4.0),
+    )
+
+    controller.on_image_tap(event, page=page)
+
+    assert classifier.labels == []
+    assert reset_calls == []
+    assert pending_confirmation["page"] is page
+    assert pending_confirmation["action"] == "Change mineral label"
+
+    pending_confirmation["on_confirm"]()
+
+    assert reset_calls == [True]
+    assert classifier.labels == [(1, 1)]
+
+
+def test_label_change_reset_discards_saved_analysis() -> None:
+    stores = Stores()
+    stores.ui.progress.set(4)
+    stores.ui.selected_index.set(4)
+    stores.ui.selected_button_at_analysis_tab.set(7)
+    stores.labeling.results.set({"Quartz": {"index": np.array([1])}})
+    stores.labeling_computation_result["grain_classification_result"] = {
+        "Quartz": {"index": np.array([1])}
+    }
+    stores.computation_result.grain_classification_result.set(
+        {"Quartz": {"index": np.array([1])}}
+    )
+
+    LabelingController(stores)._reset_analysis_for_label_change()
+
+    assert stores.computation_result.grain_classification_result.get() is None
+    assert stores.labeling.results.get() is None
+    assert "grain_classification_result" not in stores.labeling_computation_result
+    assert stores.ui.progress.get() == 3
+    assert stores.ui.selected_index.get() == 3
+    assert stores.ui.selected_button_at_analysis_tab.get() == 0
+    assert stores.ui.computing_is_stop.get() is True

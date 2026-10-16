@@ -232,7 +232,7 @@ class CenterTab(ft.Container):
             [
                 ft.Column(
                     [
-                        CustomText("Rotation center"),
+                        CustomText("Rotation center", weight=ft.FontWeight.W_900),
                         ft.Row(
                             [
                                 CustomText("X"),

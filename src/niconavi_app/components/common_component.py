@@ -24,6 +24,7 @@ class customDivider(ft.Divider):
 
 class CustomText(ft.Text):
     def __init__(self, value: str, **kwargs: Any) -> None:
+        kwargs.setdefault("selectable", True)
         super().__init__(value, **kwargs)
         self.color = ft.Colors.WHITE
 

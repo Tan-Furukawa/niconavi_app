@@ -96,6 +96,7 @@ class ImageView(ft.Container):
             stores.ui.analysis_tab.computation_unit,
             stores.ui.analysis_tab.cip_contour,
             stores.ui.analysis_tab.cip_theme,
+            stores.ui.analysis_tab.cip_color_mode,
             stores.ui.analysis_tab.cip_display_points,
             stores.ui.analysis_tab.cip_points_noise_size_percent,
             stores.ui.analysis_tab.grain_rose_diagram_target,

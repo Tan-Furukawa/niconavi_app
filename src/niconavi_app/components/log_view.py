@@ -36,8 +36,7 @@ def create_column(stores: Stores) -> ft.Column:
                         CustomText(text_val, color=text_color)
                         if text_color is not None
                         else CustomText(text_val),
-                        # icon + paddingの分を引く
-                        width=stores.appearance.tabs_width - 45,
+                        expand=True,
                     ),
                 ]
             )
@@ -53,7 +52,6 @@ class LogView(ft.Container):
 
         self.height = 200
         self.padding = 10
-        self.width = stores.appearance.tabs_width
         # self.border = ft.border.all(color=ft.Colors.WHITE)
         self.bgcolor = ft.Colors.BLACK12
 

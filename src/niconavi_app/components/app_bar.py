@@ -232,7 +232,7 @@ def make_grain_boundary_checkbox(stores: Stores) -> ReactiveCheckbox:
         stores.ui.display_grain_boundary.set(e.control.value)
 
     return CustomReactiveCheckbox(
-        label="Grain boundaries",
+        label="GBs",
         value=stores.ui.display_grain_boundary,
         visible=checkbox_visible,
         # on_change=lambda e: stores.ui.display_grain_boundary.set(e.control.value),
@@ -624,13 +624,11 @@ class niconaviAppBar:
                 ),
             ]
 
-        def build_action_controls() -> list[ft.Control]:
+        def build_toolbar_controls() -> list[ft.Control]:
             return [
-
-
                 ft.Row(
                     [
-                        CustomText("Width:"),
+                        CustomText("Image width:"),
                         make_image_width_input(stores),
                         CustomText("μm"),
                     ]
@@ -638,16 +636,17 @@ class niconaviAppBar:
 
                 make_mask_checkbox(stores),
                 make_grain_boundary_checkbox(stores),
-                ft.VerticalDivider(),
-                Container(
-                    content=PopupMenuButton(
-                        items=build_menu_items(),
-                        icon=ft.Icons.MENU,
-                        icon_color=ft.Colors.WHITE,
-                    ),
-                    margin=margin.only(left=10, right=25),
-                ),
             ]
+
+        def build_menu_control() -> Container:
+            return Container(
+                content=PopupMenuButton(
+                    items=build_menu_items(),
+                    icon=ft.Icons.MENU,
+                    icon_color=ft.Colors.WHITE,
+                ),
+                margin=margin.only(left=10, right=15),
+            )
 
         self.appbar = None
         if attach_to_page:
@@ -660,17 +659,25 @@ class niconaviAppBar:
                 center_title=True,
                 toolbar_height=50,
                 bgcolor="#ff333333",
-                actions=build_action_controls(),
+                actions=[*build_toolbar_controls(), build_menu_control()],
             )
             self.page.appbar = self.appbar
             self.page.update()
 
         self.toolbar = ft.Container(
             content=ft.Row(
-                build_action_controls(),
-                alignment=ft.MainAxisAlignment.END,
+                [
+                    ft.Row(
+                        build_toolbar_controls(),
+                        alignment=ft.MainAxisAlignment.END,
+                        scroll=ft.ScrollMode.HIDDEN,
+                        expand=True,
+                    ),
+                    ft.VerticalDivider(),
+                    build_menu_control(),
+                ],
+                spacing=0,
             ),
-            width=stores.appearance.tabs_width,
             padding=ft.padding.symmetric(horizontal=10, vertical=6),
             bgcolor=ft.Colors.BLACK26,
         )

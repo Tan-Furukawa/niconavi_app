@@ -31,7 +31,6 @@ class PageTabs(ft.Container):
         # self.height = page.window.height - stores.appearance.log_area_height
         self.tab_selected_index = stores.ui.selected_index
 
-        self.width = stores.appearance.tabs_width
         self.expand = True
         function_tabs = []
         if ENABLE_FUNCTION_TAB:

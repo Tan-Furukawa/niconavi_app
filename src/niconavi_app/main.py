@@ -68,6 +68,16 @@ ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 # PROJECT_ROOT made the app unusable from a plain niconavi_app checkout.
 APP_ROOT = Path(__file__).resolve().parents[2]
 DEBUG_START_PROJECT_DIR = APP_ROOT / "for-debug" / "start-from-project"
+MIN_SIDE_PANEL_WIDTH = 320.0
+MAX_SIDE_PANEL_WIDTH = 720.0
+
+
+def resized_side_panel_width(current_width: float, delta_x: float) -> float:
+    """Resize a right-anchored panel while keeping it within usable limits."""
+    return max(
+        MIN_SIDE_PANEL_WIDTH,
+        min(MAX_SIDE_PANEL_WIDTH, current_width - delta_x),
+    )
 
 
 def find_debug_start_project() -> Path | None:
@@ -141,7 +151,7 @@ def main(page: ft.Page) -> None:
         content=CustomText("Output"),
         height=25,
         padding=ft.padding.only(left=20),
-        width=stores.appearance.tabs_width,
+        alignment=ft.alignment.center_left,
         bgcolor=ft.Colors.BLACK26,
     )
 
@@ -188,28 +198,61 @@ def main(page: ft.Page) -> None:
     progress_bar = ProgressBar(stores)
 
     app_bar_controls = niconaviAppBar(page, stores, attach_to_page=False)
+    page_tabs = PageTabs(page, stores)
 
     container2 = ft.Container(
         ft.Column(
             [
                 app_bar_controls.toolbar,
-                PageTabs(page, stores),
-                ft.Column([progress_bar, log_view_header, log_view], spacing=0),
+                page_tabs,
+                ft.Column(
+                    [progress_bar, log_view_header, log_view],
+                    spacing=0,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                ),
             ],
             spacing=0,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         ),
         margin=0,
+        width=stores.appearance.tabs_width,
+    )
+
+    def resize_side_panel(event: ft.DragUpdateEvent) -> None:
+        current_width = float(container2.width or stores.appearance.tabs_width)
+        new_width = resized_side_panel_width(current_width, event.delta_x)
+        if abs(new_width - current_width) < 0.5:
+            return
+        container2.width = new_width
+        stores.appearance.tabs_width = int(round(new_width))
+        container2.update()
+
+    resize_handle = ft.GestureDetector(
+        mouse_cursor=ft.MouseCursor.RESIZE_LEFT_RIGHT,
+        drag_interval=10,
+        on_horizontal_drag_update=resize_side_panel,
+        content=ft.Container(
+            width=10,
+            bgcolor=ft.Colors.BLACK12,
+            content=ft.VerticalDivider(width=1, color=ft.Colors.WHITE24),
+        ),
+    )
+
+    main_row = ft.Row(
+        [
+            container1,
+            image_selector,
+            resize_handle,
+            container2,
+        ],
+        spacing=0,
+        expand=True,
+        vertical_alignment=ft.CrossAxisAlignment.STRETCH,
     )
 
     page.add(
         ft.Container(
-            ft.Row(
-                [
-                    container1,
-                    image_selector,
-                    container2,
-                ],
-            ),
+            main_row,
             expand=True,
         )
     )

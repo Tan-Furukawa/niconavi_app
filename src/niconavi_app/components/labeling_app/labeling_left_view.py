@@ -30,6 +30,7 @@ def create_labeling_left_container(
     load_status_text = ft.Text(
         value=labeling.load_status_text.get(),
         color=TEXT_COLOR,
+        selectable=True,
     )
 
     def sync_load_status() -> None:
@@ -88,7 +89,7 @@ def create_labeling_left_container(
     cursor = getattr(ft.MouseCursor, "CROSSHAIR", ft.MouseCursor.PRECISE)
     gesture = ft.GestureDetector(
         mouse_cursor=cursor,
-        on_tap_down=controller.on_image_tap,
+        on_tap_down=lambda e: controller.on_image_tap(e, page=page),
         content=image_holder,
     )
 

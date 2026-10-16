@@ -717,7 +717,7 @@ class MovieTab(ft.Container):
                 ),
                 ft.Row(
                     [
-                        CustomText("Section thickness"),
+                        CustomText("Thin section thickness"),
                         thickness_input,
                         CustomText("mm"),
                     ]

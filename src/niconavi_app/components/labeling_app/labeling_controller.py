@@ -15,6 +15,10 @@ from niconavi_app.components.labeling_app.label_controls import LabelSelectionPa
 from niconavi_app.components.labeling_app.reset import reset_filter_tab
 # from niconavi_app.components.labeling_app.reset import reset_filter_tab
 from niconavi_app.stores import LabelingMap, Stores, as_ComputationResult, save_in_ComputationResultState
+from niconavi_app.components.common_component import (
+    FILTER_TAB_STAGE,
+    confirm_discard_downstream,
+)
 from niconavi_app.components.page_tab.tabs.reset_onclick import reset_onclick_classify_button
 from niconavi_app.niconavi.grain_segmentation.grain_segmentation import (
     COMPONENT_FEATURE_COLUMNS,
@@ -290,7 +294,7 @@ class LabelingController:
         if self.labeling._loaded.get():
             self.rebuild_classifier_from_current_features()
 
-    def on_image_tap(self, e) -> None:
+    def on_image_tap(self, e, page=None) -> None:
         if not self.labeling._loaded.get():
             return
         index_map = self.labeling_map.index_map.get()
@@ -354,18 +358,33 @@ class LabelingController:
             # )
             return
 
-        self.clf.set_label(region_index, class_id=class_id)
-        self.clf.propagate()
-        self._set_labeling_param("predictions", self.clf.current_predictions())
-        self._set_labeling_param("probabilities", self.clf.current_probabilities())
-        self.labeling.user_clicked.set(True)
-        self.labeling._clicked_indices_cache.set(None)
-        self.labeling.display_predictions.set(self._compute_display_predictions())
-        self.refresh_visuals(update_stats=True)
-        label_name = labels.get(class_id, f"Class {class_id}")
-        # self.labeling.last_action_text.set(
-        #     f"Set region index={region_index} to '{label_name}'."
-        # )
+        analysis_exists = self.stores.ui.progress.get() > FILTER_TAB_STAGE
+
+        def apply_label() -> None:
+            # A saved Analysis result describes the labels as they existed
+            # before this click.  Drop it before changing the training data so
+            # that the hidden Analysis tab can never retain stale minerals.
+            if analysis_exists:
+                self._reset_analysis_for_label_change()
+
+            if self.clf is None:
+                return
+            self.clf.set_label(region_index, class_id=class_id)
+            self.clf.propagate()
+            self._set_labeling_param("predictions", self.clf.current_predictions())
+            self._set_labeling_param("probabilities", self.clf.current_probabilities())
+            self.labeling.user_clicked.set(True)
+            self.labeling._clicked_indices_cache.set(None)
+            self.labeling.display_predictions.set(self._compute_display_predictions())
+            self.refresh_visuals(update_stats=True)
+
+        confirm_discard_downstream(
+            page,
+            self.stores,
+            FILTER_TAB_STAGE,
+            "Change mineral label",
+            apply_label,
+        )
 
 
 
@@ -511,6 +530,27 @@ class LabelingController:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    def _reset_analysis_for_label_change(self) -> None:
+        """Clear saved Analysis data invalidated by a Filter label change."""
+        update_progress_bar(None, self.stores)
+        result = as_ComputationResult(self.stores.computation_result)
+        result = reset_onclick_classify_button(result, self.stores)
+        save_in_ComputationResultState(result, self.stores)
+
+        self.labeling.results.set(None)
+        self.stores.labeling_computation_result.pop(
+            "grain_classification_result", None
+        )
+        self.stores.ui.selected_button_at_analysis_tab.set(0)
+        self.stores.ui.progress.set(FILTER_TAB_STAGE)
+        if self.stores.ui.selected_index.get() > FILTER_TAB_STAGE:
+            self.stores.ui.selected_index.set(FILTER_TAB_STAGE)
+        update_progress_bar(0.0, self.stores)
+        update_logs(
+            self.stores,
+            ("Analysis results were reset because a filter label changed.", "msg"),
+        )
+
     def _initialize_app(self) -> None:
         comp = self.stores.labeling_computation_result
         raw_maps = self.stores.computation_result.raw_maps.get()

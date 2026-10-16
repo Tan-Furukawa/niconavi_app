@@ -43,16 +43,30 @@ def create_labeling_right_container(
     labeling = stores.labeling
 
     def section_title(text: str) -> ft.Text:
-        return ft.Text(text, color=TEXT_COLOR, weight=ft.FontWeight.W_900)
+        return ft.Text(
+            text,
+            color=TEXT_COLOR,
+            weight=ft.FontWeight.W_900,
+            selectable=True,
+        )
 
-    last_action_text = ft.Text(value=labeling.last_action_text.get(), color=TEXT_COLOR, size=12)
+    last_action_text = ft.Text(
+        value=labeling.last_action_text.get(),
+        color=TEXT_COLOR,
+        size=12,
+        selectable=True,
+    )
     labeled_stats_text = ft.Text(
-        value=labeling.labeled_stats_text.get(), color=TEXT_COLOR, size=12
+        value=labeling.labeled_stats_text.get(),
+        color=TEXT_COLOR,
+        size=12,
+        selectable=True,
     )
     prediction_stats_text = ft.Text(
         value=labeling.prediction_stats_text.get(),
         color=TEXT_COLOR,
         size=12,
+        selectable=True,
     )
 
     def sync_last_action() -> None:
@@ -316,6 +330,7 @@ def create_labeling_right_container(
     overlay_value_text = ft.Text(
         value=f"Opacity: {labeling.overlay_alpha.get():.2f}",
         color=TEXT_COLOR,
+        selectable=True,
     )
     overlay_slider = ft.Slider(
         min=0.0,
@@ -432,6 +447,7 @@ def create_labeling_right_container(
             navigation_controls,
             ft.Divider(),
             overlay_controls,
+            ft.Divider(),
             feature_controls,
             ft.Divider(),
             section_title("Labels"),

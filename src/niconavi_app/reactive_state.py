@@ -54,6 +54,7 @@ class ReactiveText(Text):
         visible: StateProperty[bool] = True,
         **kwargs: Any,
     ):
+        kwargs.setdefault("selectable", True)
         super().__init__(**kwargs)
         self._text = text
         self._visible = visible

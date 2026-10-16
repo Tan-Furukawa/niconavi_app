@@ -28,4 +28,4 @@ def apply_border(container: ft.Container, padding: float | None = None) -> ft.Co
 def themed_text(value: str, weight: ft.FontWeight | None = None) -> ft.Text:
     """Create a Text control without forcing custom colors."""
 
-    return ft.Text(value=value, weight=weight)
+    return ft.Text(value=value, weight=weight, selectable=True)

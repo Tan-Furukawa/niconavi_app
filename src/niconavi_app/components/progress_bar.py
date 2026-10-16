@@ -9,7 +9,6 @@ class ProgressBar(ReactiveProgressBar):
             value=stores.ui.progress_bar.progress,
             visible=stores.ui.progress_bar.visible,
         )
-        self.width = stores.appearance.tabs_width
         self.height = 5
         self.color = ft.Colors.AMBER
 
