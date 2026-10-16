@@ -62,7 +62,7 @@ from niconavi_app.niconavi.analysis import (
 )
 from niconavi_app.tools.tools import switch_tab_index, force_update_image_view
 from niconavi_app.niconavi.grain_segmentation.grain_segmentation import (
-    analyze_false_components_features,
+    analyze_indexed_components_features,
     component_info_to_feature_matrix,
 )
 from niconavi_app.components.labeling_app.visualization import render_overlay_base64
@@ -690,8 +690,10 @@ def restore_filter_tab_view(stores: Stores) -> None:
         return
 
     background_image = (
-        raw_maps.get("R_color_map") if isinstance(raw_maps, dict) else None
+        raw_maps.get("R_color_map_raw") if isinstance(raw_maps, dict) else None
     )
+    if background_image is None and isinstance(raw_maps, dict):
+        background_image = raw_maps.get("R_color_map")
     if background_image is None:
         return
 
@@ -705,9 +707,7 @@ def restore_filter_tab_view(stores: Stores) -> None:
     stores.labeling.image_height.set(grain_map.shape[0])
 
     try:
-        _, info = analyze_false_components_features(
-            boundary_mask, background_image, connectivity=4
-        )
+        info = analyze_indexed_components_features(grain_map, background_image)
         features = component_info_to_feature_matrix(info)
     except Exception:
         features = None
@@ -734,13 +734,10 @@ def restore_filter_tab_view(stores: Stores) -> None:
         ordered_items = list(results.items())
         label_dict: dict[int, str] = {}
         custom_colors: dict[int, str] = {}
-        max_index = 0
-        for _, info in ordered_items:
-            indices = info.get("index")
-            if indices is not None and len(indices) > 0:
-                max_index = max(max_index, int(np.max(indices)))
         grain_map_max_index = int(np.max(grain_map)) if grain_map.size else 0
-        predictions_length = max(max_index, grain_map_max_index) + 1
+        valid_grain_ids = np.unique(grain_map)
+        valid_grain_ids = valid_grain_ids[valid_grain_ids > 0]
+        predictions_length = grain_map_max_index + 1
         predictions = np.zeros(predictions_length, dtype=np.int32)
         for class_id, (label_name, info) in enumerate(ordered_items, start=1):
             label_dict[class_id] = label_name
@@ -748,7 +745,7 @@ def restore_filter_tab_view(stores: Stores) -> None:
             custom_colors[class_id] = color
             indices = np.asarray(info.get("index", []), dtype=np.int32)
             if indices.size > 0:
-                valid = indices[(indices >= 0) & (indices < predictions_length)]
+                valid = indices[np.isin(indices, valid_grain_ids)]
                 predictions[valid] = class_id
 
         labeling_map.predictions.set(predictions)
@@ -770,7 +767,7 @@ def restore_filter_tab_view(stores: Stores) -> None:
         stores.labeling.status_text.set("Select a label.")
         # stores.labeling.last_action_text.set("Project loaded.")
         # update_logs(stores, ("", "warn"))
-        total_labeled = sum(len(info.get("index", [])) for info in results.values())
+        total_labeled = int(np.count_nonzero(predictions))
         stores.labeling.labeled_stats_text.set(f"Labeled regions: {total_labeled}")
         stores.labeling.prediction_stats_text.set("")
         stores.labeling.image_width.set(grain_map.shape[1])

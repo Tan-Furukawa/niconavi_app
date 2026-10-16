@@ -29,6 +29,22 @@ from niconavi_app.niconavi.grain_segmentation.type import (
 from niconavi_app.niconavi.tools.grain_plot import detect_boundaries
 
 
+COMPONENT_FEATURE_KEYS = (
+    "log_elongation",
+    "Lab_L_med",
+    "Lab_a_med",
+    "Lab_b_med",
+    "cx_normalized",
+    "cy_normalized",
+)
+
+COMPONENT_FEATURE_COLUMNS: Dict[str, tuple[int, ...]] = {
+    "shape": (0,),
+    "color": (1, 2, 3),
+    "position": (4, 5),
+}
+
+
 def connect_skeleton_endpoints(
     skel_img: BinaryImage | BoolMatrix,
     max_distance: float,
@@ -328,38 +344,102 @@ def component_info_to_feature_matrix(component_info: List[Dict]) -> np.ndarray:
     index_map の 0 は背景/境界なので、0行目は未使用のダミーにする。
     """
 
-    feature_keys = [
-        "logA",
-        "C",
-        "solidity",
-        "aspect_ratio",
-        "Lab_a_med",
-        "Lab_b_med",
-        "HSV_S_med",
-        "cx",
-        "cy",
-    ]
-
     if not component_info:
-        return np.zeros((0, len(feature_keys)), dtype=np.float64)
+        return np.zeros((0, len(COMPONENT_FEATURE_KEYS)), dtype=np.float64)
 
     max_index = max(int(info["index"]) for info in component_info)
     feature_matrix = np.zeros(
-        (max_index + 1, len(feature_keys)), dtype=np.float64
+        (max_index + 1, len(COMPONENT_FEATURE_KEYS)), dtype=np.float64
     )
     for info in component_info:
-        feature_matrix[int(info["index"])] = [float(info[key]) for key in feature_keys]
+        feature_matrix[int(info["index"])] = [
+            float(info[key]) for key in COMPONENT_FEATURE_KEYS
+        ]
 
     return feature_matrix
 
 
+def analyze_indexed_components_features(
+    index_map: np.ndarray, pic: np.ndarray
+) -> List[Dict]:
+    """Extract features using the IDs already assigned in ``index_map``.
+
+    ``index_map`` IDs are preserved so a feature row, a clicked region, and a
+    classification result always refer to the same grain.  ``pic`` is an RGB
+    uint8 image, matching the color-map representation used by NicoNavi.
+    """
+    if index_map.ndim != 2 or not np.issubdtype(index_map.dtype, np.integer):
+        raise ValueError("index_map must be a 2D integer array.")
+    if np.any(index_map < 0):
+        raise ValueError("index_map must not contain negative IDs.")
+    if (
+        pic.ndim != 3
+        or pic.shape[:2] != index_map.shape
+        or pic.shape[2] != 3
+        or pic.dtype != np.uint8
+    ):
+        raise ValueError(
+            "pic must be an RGB uint8 array with the same height and width "
+            "as index_map."
+        )
+
+    pic_lab = cv2.cvtColor(pic, cv2.COLOR_RGB2Lab)
+    info_list: List[Dict] = []
+
+    for raw_label in np.unique(index_map):
+        label = int(raw_label)
+        if label == 0:
+            continue
+
+        ys, xs = np.nonzero(index_map == label)
+        area = int(xs.size)
+        if area == 0:
+            continue
+
+        coordinates = np.column_stack((xs, ys)).astype(np.float64)
+        coordinates -= coordinates.mean(axis=0)
+        covariance = coordinates.T @ coordinates / area
+        eigenvalues = np.linalg.eigvalsh(covariance)
+        # Treat each pixel as a unit square so one-pixel-wide grains remain
+        # finite.  The logarithm makes reciprocal axis ratios symmetric.
+        pixel_variance = 1.0 / 12.0
+        elongation = np.sqrt(
+            (float(eigenvalues[-1]) + pixel_variance)
+            / (float(eigenvalues[0]) + pixel_variance)
+        )
+        log_elongation = float(np.log(elongation))
+
+        component_lab = pic_lab[ys, xs]
+        # Convert OpenCV's uint8 Lab representation to conventional CIE Lab
+        # units before measuring distances between colors.
+        Lab_L_med = float(np.median(component_lab[:, 0])) * 100.0 / 255.0
+        Lab_a_med = float(np.median(component_lab[:, 1])) - 128.0
+        Lab_b_med = float(np.median(component_lab[:, 2])) - 128.0
+        height, width = index_map.shape
+
+        info_list.append(
+            {
+                "index": label,
+                "area": area,
+                "log_elongation": log_elongation,
+                "Lab_L_med": Lab_L_med,
+                "Lab_a_med": Lab_a_med,
+                "Lab_b_med": Lab_b_med,
+                "cx_normalized": float(xs.mean()) / max(width - 1, 1),
+                "cy_normalized": float(ys.mean()) / max(height - 1, 1),
+            }
+        )
+
+    return info_list
+
+
 def analyze_false_components_features(
     mask: np.ndarray, pic: np.ndarray, connectivity: int = 4
-) -> Tuple[np.ndarray, List[Dict], np.ndarray]:
+) -> Tuple[np.ndarray, List[Dict]]:
     """
     入力:
         mask: (H, W) bool。True=ネットワーク(前景), False=対象領域(後景)
-        pic : (H, W, 3) np.uint8（BGR想定）
+        pic : (H, W, 3) np.uint8（RGB）
         connectivity: 4 or 8
 
     出力:
@@ -367,13 +447,10 @@ def analyze_false_components_features(
         info_list   : 各成分の辞書（index昇順）
             {
               "index": int,
-              "area": int, "perimeter": float,
-              "logA": float, "C": float, "solidity": float, "aspect_ratio": float,
-              "Lab_a_med": float, "Lab_b_med": float, "HSV_S_med": float,
-              "cx": float, "cy": float   # 画素座標（x=列, y=行）
+              "area": int, "log_elongation": float,
+              "Lab_L_med": float, "Lab_a_med": float, "Lab_b_med": float,
+              "cx_normalized": float, "cy_normalized": float
             }
-        X: (N, 9) の np.float64
-           列順 = [logA, C, solidity, aspect_ratio, Lab_a_med, Lab_b_med, HSV_S_med, cx, cy]
     """
     # 入力チェック
     if mask.ndim != 2 or mask.dtype != np.bool_:
@@ -390,119 +467,12 @@ def analyze_false_components_features(
     if connectivity not in (4, 8):
         raise ValueError("connectivity は 4 または 8 を指定してください。")
 
-    H, W = mask.shape
-
     # False を前景(=255)に
     inv = np.where(~mask, 255, 0).astype(np.uint8)
 
-    # 連結成分ラベリング（重心も取得）
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-        inv, connectivity=connectivity
-    )
-    labels_int32 = labels.astype(np.int32)
-
-    # 色空間は一度だけ変換
-    pic_lab = cv2.cvtColor(pic, cv2.COLOR_BGR2Lab)  # (L,a,b)
-    pic_hsv = cv2.cvtColor(pic, cv2.COLOR_BGR2HSV)  # (H,S,V)
-
-    info_list: List[Dict] = []
-    rows: List[List[float]] = []
-
-    for lbl in range(1, num_labels):  # 0 は mask=True 側（背景）
-        x, y, w, h, area = (
-            stats[lbl, cv2.CC_STAT_LEFT],
-            stats[lbl, cv2.CC_STAT_TOP],
-            stats[lbl, cv2.CC_STAT_WIDTH],
-            stats[lbl, cv2.CC_STAT_HEIGHT],
-            int(stats[lbl, cv2.CC_STAT_AREA]),
-        )
-        if area <= 0 or w <= 0 or h <= 0:
-            continue
-
-        # ---- ROI で処理 ----
-        lab_roi = pic_lab[y : y + h, x : x + w]
-        hsv_roi = pic_hsv[y : y + h, x : x + w]
-        lbl_roi = labels[y : y + h, x : x + w]
-        roi_mask = lbl_roi == lbl
-
-        # 周長（この成分だけの2値ROIで外周のみ）
-        comp_bin = np.zeros((h, w), dtype=np.uint8)
-        comp_bin[roi_mask] = 255
-        cnts, _ = cv2.findContours(comp_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        perimeter = float(sum(cv2.arcLength(c, True) for c in cnts))
-
-        # 凸包面積
-        hull_area = 0.0
-        for c in cnts:
-            if c.size == 0:
-                continue
-            hull = cv2.convexHull(c)
-            hull_area += cv2.contourArea(hull)
-        if hull_area <= 0:
-            hull_area = float(area)
-
-        # 形状特徴
-        logA = float(np.log(area))
-        C = float((perimeter * perimeter) / (4.0 * np.pi * area))  # 円形度
-        solidity = float(area / hull_area)
-        aspect_ratio = float(w / h)
-
-        # 色のメディアン（a, b, S）
-        a_vals = lab_roi[..., 1][roi_mask]
-        b_vals = lab_roi[..., 2][roi_mask]
-        s_vals = hsv_roi[..., 1][roi_mask]
-        Lab_a_med = float(np.median(a_vals)) if a_vals.size else 0.0
-        Lab_b_med = float(np.median(b_vals)) if b_vals.size else 0.0
-        HSV_S_med = float(np.median(s_vals)) if s_vals.size else 0.0
-
-        # 重心（connectedComponentsWithStats の centroids は (x, y)）
-        cx, cy = float(centroids[lbl, 0]), float(centroids[lbl, 1])
-
-        info_list.append(
-            {
-                "index": lbl,
-                "area": area,
-                "perimeter": perimeter,
-                "logA": logA,
-                "C": C,
-                "solidity": solidity,
-                "aspect_ratio": aspect_ratio,
-                "Lab_a_med": Lab_a_med,
-                "Lab_b_med": Lab_b_med,
-                "HSV_S_med": HSV_S_med,
-                "cx": cx,
-                "cy": cy,
-            }
-        )
-
-        rows.append(
-            [logA, C, solidity, aspect_ratio, Lab_a_med, Lab_b_med, HSV_S_med, cx, cy]
-        )
-
-    # index 昇順に整える（rows も同期）
-    info_list.sort(key=lambda d: d["index"])
-    if info_list:
-        X = np.array(
-            [
-                [
-                    d["logA"],
-                    d["C"],
-                    d["solidity"],
-                    d["aspect_ratio"],
-                    d["Lab_a_med"],
-                    d["Lab_b_med"],
-                    d["HSV_S_med"],
-                    d["cx"],
-                    d["cy"],
-                ]
-                for d in info_list
-            ],
-            dtype=np.float64,
-        )
-    else:
-        X = np.zeros((0, 9), dtype=np.float64)
-
-    return labels_int32, info_list
+    _, labels = cv2.connectedComponents(inv, connectivity=connectivity)
+    labels_int32 = labels.astype(np.int32, copy=False)
+    return labels_int32, analyze_indexed_components_features(labels_int32, pic)
 
 
 def make_extinction_angle_image(extinction_map: FloatMatrix) -> GrayScaleImage:

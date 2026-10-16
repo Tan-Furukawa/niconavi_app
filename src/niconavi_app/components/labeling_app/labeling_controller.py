@@ -17,7 +17,9 @@ from niconavi_app.components.labeling_app.reset import reset_filter_tab
 from niconavi_app.stores import LabelingMap, Stores, as_ComputationResult, save_in_ComputationResultState
 from niconavi_app.components.page_tab.tabs.reset_onclick import reset_onclick_classify_button
 from niconavi_app.niconavi.grain_segmentation.grain_segmentation import (
-    analyze_false_components_features,
+    COMPONENT_FEATURE_COLUMNS,
+    COMPONENT_FEATURE_KEYS,
+    analyze_indexed_components_features,
     component_info_to_feature_matrix,
 )
 
@@ -30,11 +32,7 @@ from niconavi_app.niconavi.type import (
 )
 
 INITIAL_LABELS: Dict[int, int] = {}
-FEATURE_COLUMNS: Dict[str, tuple[int, ...]] = {
-    "shape": (0, 1, 2, 3),
-    "color": (4, 5, 6),
-    "position": (7, 8),
-}
+FEATURE_COLUMNS = COMPONENT_FEATURE_COLUMNS
 
 
 def add_minera_name_to_grain_list(
@@ -407,6 +405,11 @@ class LabelingController:
                 fallback = np.bincount(nonzero_vals).argmax()
                 predictions[predictions == 0] = fallback
 
+        # Feature row 0 is a dummy for the background/boundary ID and must not
+        # become part of a user classification.
+        if predictions.size:
+            predictions[0] = 0
+
         self.labeling_map.predictions.set(predictions)
 
         # print("-------------")
@@ -426,14 +429,26 @@ class LabelingController:
         color_map = self._current_color_map()
         results: Dict[str, Dict] = {}
 
+        index_map = self.labeling_map.index_map.get()
+        if index_map is None:
+            return
+        valid_region_ids = np.unique(np.asarray(index_map, dtype=np.int64))
+        valid_region_ids = valid_region_ids[
+            (valid_region_ids > 0) & (valid_region_ids < predictions.size)
+        ]
         label_ids = [cid for cid, name in labels.items() if cid != 0 and name]
-        assigned_classes = sorted(set(predictions[(predictions != 0) & np.isin(predictions, label_ids)]))
+        valid_predictions = predictions[valid_region_ids]
+        assigned_classes = sorted(
+            set(valid_predictions[np.isin(valid_predictions, label_ids)])
+        )
 
         for class_id in assigned_classes:
             label_name = labels.get(class_id)
             if not label_name:
                 continue
-            indices = np.flatnonzero(predictions == class_id).astype(np.int32)
+            indices = valid_region_ids[
+                predictions[valid_region_ids] == class_id
+            ].astype(np.int32)
             if indices.size == 0:
                 continue
             color_hex = color_map.get(class_id)
@@ -497,39 +512,32 @@ class LabelingController:
     # ------------------------------------------------------------------
     def _initialize_app(self) -> None:
         comp = self.stores.labeling_computation_result
-        required_keys = {"index_map", "boundary_mask", "background_image", "features"}
-        if required_keys.issubset(comp.keys()):
-            index_map = comp["index_map"]
-            boundary_mask = comp["boundary_mask"]
-            background_image = comp["background_image"]
-            features = comp["features"]
-        else:
+        raw_maps = self.stores.computation_result.raw_maps.get()
+        index_map = self.stores.computation_result.grain_map.get()
+        boundary_mask = self.stores.computation_result.grain_boundary.get()
+        if raw_maps is None or index_map is None:
+            raise RuntimeError("classification source data failed to load")
+        background_image = raw_maps.get("R_color_map_raw")
+        if background_image is None:
+            background_image = raw_maps.get("R_color_map")
+        if background_image is None:
+            raise RuntimeError("classification color map failed to load")
+        if boundary_mask is None:
+            boundary_mask = np.zeros_like(index_map, dtype=bool)
 
-            R_color_map = self.stores.computation_result.raw_maps.get()["R_color_map_raw"]
-            index_map = self.stores.computation_result.grain_map.get()
-            grain_boundary = self.stores.computation_result.grain_boundary.get()
-            boundary_mask = self.stores.computation_result.grain_boundary.get()
-
-            mat, info = analyze_false_components_features(
-                grain_boundary != 0, R_color_map, connectivity=4
-            )
-            features = component_info_to_feature_matrix(info)
-
-            background_image = R_color_map
-
-            # index_map = np.load("data/index_map.npy")
-            # boundary_mask = np.load("data/data.npy").astype(bool)
-            # background_image = np.load("data/pic.npy")
-            # features = np.load("data/features.npy")
-
-            comp.update(
-                {
-                    "index_map": index_map,
-                    "boundary_mask": boundary_mask,
-                    "background_image": background_image,
-                    "features": features,
-                }
-            )
+        # The grain map may have been recalculated since the Filter tab was
+        # last opened.  Always derive features from the current authoritative
+        # map instead of reusing a stale UI cache.
+        info = analyze_indexed_components_features(index_map, background_image)
+        features = component_info_to_feature_matrix(info)
+        comp.update(
+            {
+                "index_map": index_map,
+                "boundary_mask": boundary_mask,
+                "background_image": background_image,
+                "features": features,
+            }
+        )
 
         self._set_labeling_param("index_map", index_map)
         self._set_labeling_param("boundary_mask", boundary_mask)
@@ -585,20 +593,30 @@ class LabelingController:
         return InteractiveLabelPropagation(
             n_neighbors=5,
             kernel="knn",
-            reject_threshold=0.55,
+            reject_threshold=0.0,
+            prototype_weight=1.0,
+            scale_features=False,
         )
 
     def _feature_weights(self, features: np.ndarray) -> np.ndarray:
+        if features.shape[1] != len(COMPONENT_FEATURE_KEYS):
+            raise ValueError(
+                "Unexpected classification feature layout: "
+                f"expected {len(COMPONENT_FEATURE_KEYS)} columns, "
+                f"got {features.shape[1]}."
+            )
         weights = np.zeros(features.shape[1], dtype=np.float64)
         if self.labeling.use_shape_features.get():
             weights[list(FEATURE_COLUMNS["shape"])] = 1.0
         if self.labeling.use_color_features.get():
-            weights[list(FEATURE_COLUMNS["color"])] = 1.0
+            # A common factor preserves ordinary Euclidean distance in Lab.
+            # It only balances Lab against the other optional feature groups.
+            weights[list(FEATURE_COLUMNS["color"])] = 0.02
         if self.labeling.use_position_features.get():
             weights[list(FEATURE_COLUMNS["position"])] = 0.2
         if not np.any(weights):
             weights[:] = 1.0
-            if weights.size >= 9:
+            if weights.size >= 2:
                 weights[-2:] = 0.2
         return weights
 

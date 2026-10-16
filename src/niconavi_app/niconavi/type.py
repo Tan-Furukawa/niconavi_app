@@ -232,15 +232,12 @@ class Grain(TypedDict):
 
 
 class GrainFeaturesForClassification(TypedDict):
-    logA: float
-    C: float
-    solidity: float
-    aspect_ratio: float
+    log_elongation: float
+    Lab_L_med: float
     Lab_a_med: float
     Lab_b_med: float
-    HSV_S_med: float
-    cx: float
-    cy: float
+    cx_normalized: float
+    cy_normalized: float
 
 
 class GrainDetectionParameters:

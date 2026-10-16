@@ -21,6 +21,7 @@ class InteractiveLabelPropagation:
         reject_threshold: float = 0.55,  # 最大クラス確率がこれ未満なら class 0
         position_weight: float = 0.2,
         prototype_weight: float = 0.85,
+        scale_features: bool = True,
     ):
         self.n_neighbors = n_neighbors
         self.kernel = kernel
@@ -29,6 +30,7 @@ class InteractiveLabelPropagation:
         self.reject_threshold = reject_threshold
         self.position_weight = position_weight
         self.prototype_weight = prototype_weight
+        self.scale_features = scale_features
 
         self.X_: Optional[np.ndarray] = None  # (N, d) 生特徴
         self.feature_weights_: Optional[np.ndarray] = None
@@ -49,7 +51,7 @@ class InteractiveLabelPropagation:
         feature_weights: Optional[np.ndarray] = None,
     ) -> None:
         """
-        X: (N, d) 特徴行列（例: [logA, C, solidity, aspect_ratio, Lab(a), Lab(b), HSV(S)])
+        X: (N, d) feature matrix (for example: elongation, Lab(L/a/b), position)
         """
         if X.ndim != 2:
             raise ValueError("X must be 2D array.")
@@ -70,9 +72,13 @@ class InteractiveLabelPropagation:
                 weights[-2:] = float(self.position_weight)
         self.feature_weights_ = weights.copy()
         weighted_x = self.X_[:, selected]
-        Scaler = RobustScaler if self.use_robust_scaler else StandardScaler
-        self.scaler_ = Scaler().fit(weighted_x)
-        self.Z_ = self.scaler_.transform(weighted_x)
+        if self.scale_features:
+            Scaler = RobustScaler if self.use_robust_scaler else StandardScaler
+            self.scaler_ = Scaler().fit(weighted_x)
+            self.Z_ = self.scaler_.transform(weighted_x)
+        else:
+            self.scaler_ = None
+            self.Z_ = weighted_x.copy()
         self.Z_ *= weights[selected]
         N = self.Z_.shape[0]
         # 最初はすべて未ラベル（-1）。推論の既定値は後段で 0 とする
@@ -131,7 +137,11 @@ class InteractiveLabelPropagation:
             return
 
         prototype_proba, classes = self._prototype_probabilities(labeled_mask)
-        graph_proba = self._label_propagation_probabilities(classes)
+        graph_proba = (
+            None
+            if self.prototype_weight >= 1.0
+            else self._label_propagation_probabilities(classes)
+        )
         if graph_proba is None:
             proba = prototype_proba
         else:
