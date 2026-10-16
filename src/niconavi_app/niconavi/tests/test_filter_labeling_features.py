@@ -4,12 +4,32 @@ import numpy as np
 from niconavi_app.components.labeling_app.label_propagation import (
     InteractiveLabelPropagation,
 )
+from niconavi_app.components.labeling_app.labeling_controller import LabelingController
 from niconavi_app.niconavi.grain_segmentation.grain_segmentation import (
     COMPONENT_FEATURE_COLUMNS,
     COMPONENT_FEATURE_KEYS,
     analyze_indexed_components_features,
     component_info_to_feature_matrix,
 )
+from niconavi_app.stores import Stores
+
+
+def test_default_labeling_features_include_size_but_not_position() -> None:
+    stores = Stores()
+    labeling = stores.labeling
+
+    assert labeling.use_color_features.get() is True
+    assert labeling.use_shape_features.get() is True
+    assert labeling.use_size_features.get() is True
+    assert labeling.use_position_features.get() is False
+
+    weights = LabelingController(stores)._feature_weights(
+        np.zeros((1, len(COMPONENT_FEATURE_KEYS)), dtype=np.float64)
+    )
+    assert np.all(weights[list(COMPONENT_FEATURE_COLUMNS["color"])] > 0)
+    assert np.all(weights[list(COMPONENT_FEATURE_COLUMNS["shape"])] > 0)
+    assert np.all(weights[list(COMPONENT_FEATURE_COLUMNS["size"])] > 0)
+    assert np.all(weights[list(COMPONENT_FEATURE_COLUMNS["position"])] == 0)
 
 
 def test_component_features_preserve_grain_ids_and_rgb_color() -> None:
@@ -27,10 +47,11 @@ def test_component_features_preserve_grain_ids_and_rgb_color() -> None:
     assert [item["index"] for item in info] == [2, 5]
     assert features.shape == (6, len(COMPONENT_FEATURE_KEYS))
     assert np.all(features[[0, 1, 3, 4]] == 0)
-    assert features[2, 1] == np.median(expected_lab[:, :3, 0]) * 100.0 / 255.0
-    assert features[2, 2] == np.median(expected_lab[:, :3, 1]) - 128.0
-    assert features[2, 3] == np.median(expected_lab[:, :3, 2]) - 128.0
-    assert features[5, 1] == np.median(expected_lab[:, 3:, 0]) * 100.0 / 255.0
+    assert features[2, 1] == np.log(12)
+    assert features[2, 2] == np.median(expected_lab[:, :3, 0]) * 100.0 / 255.0
+    assert features[2, 3] == np.median(expected_lab[:, :3, 1]) - 128.0
+    assert features[2, 4] == np.median(expected_lab[:, :3, 2]) - 128.0
+    assert features[5, 2] == np.median(expected_lab[:, 3:, 0]) * 100.0 / 255.0
 
 
 def test_color_features_learn_dark_and_bright_grains() -> None:
@@ -75,3 +96,37 @@ def test_shape_feature_is_rotation_invariant_elongation() -> None:
 
     assert np.isclose(features[1, 0], features[2, 0])
     assert features[1, 0] > features[3, 0]
+
+
+def test_size_feature_uses_logarithmic_component_area() -> None:
+    index_map = np.zeros((16, 30), dtype=np.int32)
+    index_map[1:3, 1:3] = 1
+    index_map[1:4, 6:9] = 2
+    index_map[1:5, 12:16] = 3
+    index_map[1:7, 20:26] = 4
+    image = np.zeros((16, 30, 3), dtype=np.uint8)
+    features = component_info_to_feature_matrix(
+        analyze_indexed_components_features(index_map, image)
+    )
+
+    size_column = COMPONENT_FEATURE_COLUMNS["size"][0]
+    assert np.allclose(
+        features[1:5, size_column],
+        np.log(np.array([4, 9, 16, 36], dtype=np.float64)),
+    )
+
+    weights = np.zeros(features.shape[1], dtype=np.float64)
+    weights[size_column] = 1.0
+    classifier = InteractiveLabelPropagation(
+        n_neighbors=3,
+        kernel="knn",
+        reject_threshold=0.0,
+        prototype_weight=1.0,
+        scale_features=False,
+    )
+    classifier.fit_features(features, feature_weights=weights)
+    classifier.set_label(1, class_id=1)
+    classifier.set_label(4, class_id=2)
+    classifier.propagate()
+
+    assert classifier.current_predictions()[1:5].tolist() == [1, 1, 2, 2]

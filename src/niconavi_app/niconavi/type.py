@@ -233,6 +233,7 @@ class Grain(TypedDict):
 
 class GrainFeaturesForClassification(TypedDict):
     log_elongation: float
+    log_area: float
     Lab_L_med: float
     Lab_a_med: float
     Lab_b_med: float

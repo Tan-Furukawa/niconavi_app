@@ -51,7 +51,7 @@ class InteractiveLabelPropagation:
         feature_weights: Optional[np.ndarray] = None,
     ) -> None:
         """
-        X: (N, d) feature matrix (for example: elongation, Lab(L/a/b), position)
+        X: (N, d) feature matrix (for example: elongation, size, Lab, position)
         """
         if X.ndim != 2:
             raise ValueError("X must be 2D array.")

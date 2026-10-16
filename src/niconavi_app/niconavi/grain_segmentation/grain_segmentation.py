@@ -31,6 +31,7 @@ from niconavi_app.niconavi.tools.grain_plot import detect_boundaries
 
 COMPONENT_FEATURE_KEYS = (
     "log_elongation",
+    "log_area",
     "Lab_L_med",
     "Lab_a_med",
     "Lab_b_med",
@@ -40,8 +41,9 @@ COMPONENT_FEATURE_KEYS = (
 
 COMPONENT_FEATURE_COLUMNS: Dict[str, tuple[int, ...]] = {
     "shape": (0,),
-    "color": (1, 2, 3),
-    "position": (4, 5),
+    "size": (1,),
+    "color": (2, 3, 4),
+    "position": (5, 6),
 }
 
 
@@ -408,6 +410,9 @@ def analyze_indexed_components_features(
             / (float(eigenvalues[0]) + pixel_variance)
         )
         log_elongation = float(np.log(elongation))
+        # Logarithmic area makes the feature describe relative size: doubling
+        # an object's area has the same effect regardless of its absolute size.
+        log_area = float(np.log(area))
 
         component_lab = pic_lab[ys, xs]
         # Convert OpenCV's uint8 Lab representation to conventional CIE Lab
@@ -422,6 +427,7 @@ def analyze_indexed_components_features(
                 "index": label,
                 "area": area,
                 "log_elongation": log_elongation,
+                "log_area": log_area,
                 "Lab_L_med": Lab_L_med,
                 "Lab_a_med": Lab_a_med,
                 "Lab_b_med": Lab_b_med,
@@ -447,7 +453,7 @@ def analyze_false_components_features(
         info_list   : 各成分の辞書（index昇順）
             {
               "index": int,
-              "area": int, "log_elongation": float,
+              "area": int, "log_elongation": float, "log_area": float,
               "Lab_L_med": float, "Lab_a_med": float, "Lab_b_med": float,
               "cx_normalized": float, "cy_normalized": float
             }

@@ -49,6 +49,7 @@ def collect_project_ui_state(stores: Stores) -> dict[str, Any]:
         "labeling": {
             "use_color_features": stores.labeling.use_color_features.get(),
             "use_shape_features": stores.labeling.use_shape_features.get(),
+            "use_size_features": stores.labeling.use_size_features.get(),
             "use_position_features": stores.labeling.use_position_features.get(),
         },
         "map_tab": {

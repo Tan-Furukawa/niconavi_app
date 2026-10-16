@@ -374,8 +374,11 @@ def restore_labeling_feature_state(stores: Stores, ui_state: dict[str, Any]) -> 
     stores.labeling.use_shape_features.set(
         bool(labeling_state.get("use_shape_features", True))
     )
+    stores.labeling.use_size_features.set(
+        bool(labeling_state.get("use_size_features", True))
+    )
     stores.labeling.use_position_features.set(
-        bool(labeling_state.get("use_position_features", True))
+        bool(labeling_state.get("use_position_features", False))
     )
 
 

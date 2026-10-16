@@ -277,6 +277,7 @@ class LabelingController:
         if not (
             self.labeling.use_color_features.get()
             or self.labeling.use_shape_features.get()
+            or self.labeling.use_size_features.get()
             or self.labeling.use_position_features.get()
         ):
             state.set(True)
@@ -608,6 +609,8 @@ class LabelingController:
         weights = np.zeros(features.shape[1], dtype=np.float64)
         if self.labeling.use_shape_features.get():
             weights[list(FEATURE_COLUMNS["shape"])] = 1.0
+        if self.labeling.use_size_features.get():
+            weights[list(FEATURE_COLUMNS["size"])] = 1.0
         if self.labeling.use_color_features.get():
             # A common factor preserves ordinary Euclidean distance in Lab.
             # It only balances Lab against the other optional feature groups.
@@ -616,8 +619,7 @@ class LabelingController:
             weights[list(FEATURE_COLUMNS["position"])] = 0.2
         if not np.any(weights):
             weights[:] = 1.0
-            if weights.size >= 2:
-                weights[-2:] = 0.2
+            weights[list(FEATURE_COLUMNS["position"])] = 0.2
         return weights
 
     def rebuild_classifier_from_current_features(self) -> None:

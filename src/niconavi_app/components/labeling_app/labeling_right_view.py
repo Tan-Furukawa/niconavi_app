@@ -273,11 +273,12 @@ def create_labeling_right_container(
 
     feature_checkbox_row = ft.Row(
         controls=[
-            make_feature_checkbox("color", "Color (Lab)"),
-            make_feature_checkbox("shape", "Shape (elongation)"),
+            make_feature_checkbox("color", "Color"),
+            make_feature_checkbox("shape", "Elongation"),
+            make_feature_checkbox("size", "Size"),
             make_feature_checkbox("position", "Position"),
         ],
-        wrap=False,
+        wrap=True,
         spacing=0,
         run_spacing=0,
         visible=False,
