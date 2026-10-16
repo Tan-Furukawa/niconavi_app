@@ -1,3 +1,87 @@
+Both packages use an uv-managed CPython distribution from
+`python-build-standalone` and install the exact runtime dependencies exported
+from `uv.lock`. PyInstaller is not used. Build outputs go under `dist/` and are
+ignored by Git.
+
+The package icon is `src/niconavi_app/assets/favicon.png`. Its SHA-256 is
+`70acd223da029c98f4361632a3cffe9cabb29cb759b176ebf63fcfcd1e7fced4`, which
+matches the image used on the NicoNavi website home page:
+<https://tan-furukawa.github.io/niconavi/images/avatar.png>.
+
+## Windows x64 installer
+
+Build on Windows x64. Install:
+
+- uv
+- Inno Setup 6
+
+From PowerShell at the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\windows\build_windows.ps1
+```
+
+The result is:
+
+```text
+dist\windows\NicoNavi-<version>-Setup-x64.exe
+```
+
+Use `-StageOnly` to prepare and smoke-test the portable application directory
+without compiling the Inno Setup installer. `-PythonVersion`, `-AppVersion`,
+`-OutputDirectory`, `-PackagingCacheDirectory`, and `-IsccPath` can override
+their corresponding defaults.
+
+The installed application is per-user and does not request administrator
+rights. The required Microsoft Visual C++ runtime is bundled with the
+application, so users do not need to install it separately. Mutable application
+data is stored under `%LOCALAPPDATA%\NicoNavi`.
+
+### Build with GitHub Actions
+
+The `Build Windows installer` workflow runs the same build on
+`windows-latest`. Open the repository's **Actions** tab, choose the workflow,
+and select **Run workflow**. It also runs automatically for tags matching
+`v*`.
+
+The job creates `Windows/NicoNavi-Setup.exe`. Download the `NicoNavi-Windows` artifact
+from the completed workflow run. After extraction it contains:
+
+```text
+NicoNavi-Setup.exe
+NicoNavi-Setup.exe.sha256
+```
+
+Action artifacts are stored by GitHub for 14 days and then deleted
+automatically. They are not added to the Git history. This workflow does not
+create a GitHub Release or upload files to one.
+
+## Ubuntu/Linux x86_64 AppImage
+
+Build on Linux x86_64 with uv and curl installed:
+
+```bash
+./packaging/build_appimage.sh
+```
+
+The result is:
+
+```text
+dist/appimage/NicoNavi-<version>-x86_64.AppImage
+```
+
+The script caches the standalone Python plus pinned, checksum-verified releases
+of `appimagetool` and the AppImage Type 2 runtime in the user cache. FUSE is not
+required while building. Mutable application data is stored under
+`${XDG_DATA_HOME:-~/.local/share}/niconavi`.
+
+Run the completed image with:
+
+```bash
+chmod +x dist/appimage/NicoNavi-*-x86_64.AppImage
+./dist/appimage/NicoNavi-*-x86_64.AppImage
+```
+
 # NicoNaviのパッケージング
 
 [日本語](#niconaviのパッケージング) | [English](#english)
@@ -114,91 +198,3 @@ chmod +x dist/appimage/NicoNavi-*-x86_64.AppImage
 ```
 
 ---
-
-# English
-
-[日本語](#niconaviのパッケージング) | [English](#english)
-
-Both packages use an uv-managed CPython distribution from
-`python-build-standalone` and install the exact runtime dependencies exported
-from `uv.lock`. PyInstaller is not used. Build outputs go under `dist/` and are
-ignored by Git.
-
-The package icon is `src/niconavi_app/assets/favicon.png`. Its SHA-256 is
-`70acd223da029c98f4361632a3cffe9cabb29cb759b176ebf63fcfcd1e7fced4`, which
-matches the image used on the NicoNavi website home page:
-<https://tan-furukawa.github.io/niconavi/images/avatar.png>.
-
-## Windows x64 installer
-
-Build on Windows x64. Install:
-
-- uv
-- Inno Setup 6
-
-From PowerShell at the repository root:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File packaging\windows\build_windows.ps1
-```
-
-The result is:
-
-```text
-dist\windows\NicoNavi-<version>-Setup-x64.exe
-```
-
-Use `-StageOnly` to prepare and smoke-test the portable application directory
-without compiling the Inno Setup installer. `-PythonVersion`, `-AppVersion`,
-`-OutputDirectory`, `-PackagingCacheDirectory`, and `-IsccPath` can override
-their corresponding defaults.
-
-The installed application is per-user and does not request administrator
-rights. The required Microsoft Visual C++ runtime is bundled with the
-application, so users do not need to install it separately. Mutable application
-data is stored under `%LOCALAPPDATA%\NicoNavi`.
-
-### Build with GitHub Actions
-
-The `Build Windows installer` workflow runs the same build on
-`windows-latest`. Open the repository's **Actions** tab, choose the workflow,
-and select **Run workflow**. It also runs automatically for tags matching
-`v*`.
-
-The job creates `Windows/NicoNavi-Setup.exe`. Download the `NicoNavi-Windows` artifact
-from the completed workflow run. After extraction it contains:
-
-```text
-NicoNavi-Setup.exe
-NicoNavi-Setup.exe.sha256
-```
-
-Action artifacts are stored by GitHub for 14 days and then deleted
-automatically. They are not added to the Git history. This workflow does not
-create a GitHub Release or upload files to one.
-
-## Ubuntu/Linux x86_64 AppImage
-
-Build on Linux x86_64 with uv and curl installed:
-
-```bash
-./packaging/build_appimage.sh
-```
-
-The result is:
-
-```text
-dist/appimage/NicoNavi-<version>-x86_64.AppImage
-```
-
-The script caches the standalone Python plus pinned, checksum-verified releases
-of `appimagetool` and the AppImage Type 2 runtime in the user cache. FUSE is not
-required while building. Mutable application data is stored under
-`${XDG_DATA_HOME:-~/.local/share}/niconavi`.
-
-Run the completed image with:
-
-```bash
-chmod +x dist/appimage/NicoNavi-*-x86_64.AppImage
-./dist/appimage/NicoNavi-*-x86_64.AppImage
-```
