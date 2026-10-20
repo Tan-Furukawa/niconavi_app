@@ -6,7 +6,6 @@ from niconavi_app.stores import (
 from niconavi_app.reactive_state import (
     ReactiveText,
     ReactiveExpansionTile,
-    ReactiveRadioGroup,
     ReactiveDivider,
     ReactiveRow,
     ReactiveColumn,
@@ -74,7 +73,18 @@ from niconavi_app.niconavi.tools.str_parser import (
     parse_larger_than_0,
     parse_larger_than_1,
 )
+from niconavi_app.tools.validation import parse_larger_than_zero_int
 from niconavi_app.components.labeling_app.reset import reset_filter_tab
+
+
+def parse_smallest_grain_size(value: str) -> int | None:
+    parsed = parse_larger_than_zero_int(value)
+    return parsed if parsed is not None and parsed >= 1 else None
+
+
+def parse_slic_superpixel_size(value: str) -> int | None:
+    parsed = parse_larger_than_zero_int(value)
+    return parsed if parsed is not None and parsed >= 5 else None
 
 
 def select_grain_tab_image(stores: Stores, button_index: int) -> None:
@@ -94,6 +104,8 @@ def reset_angle_map_workflow(stores: Stores) -> None:
     stores.ui.map_tab.cleaning_count.set(0)
     stores.ui.map_tab.fill_boundary_count.set(0.0)
     stores.ui.map_tab.segmentation_angle.set(5)
+    stores.ui.map_tab.smallest_grain_linear_size.set(3)
+    stores.ui.map_tab.slic_superpixel_size.set(30)
     stores.ui.map_tab.segmentation_done.set(False)
     stores.ui.map_tab.fill_boundary_started.set(False)
     stores.ui.map_tab.boundary_registered.set(False)
@@ -303,9 +315,30 @@ def segmentation_button_click(stores: Stores, e: ft.ControlEvent, *, logger: Log
             update_progress_bar(0.0, stores)
             return
 
+        smallest_grain_size = stores.ui.map_tab.smallest_grain_linear_size.get()
+        slic_superpixel_size = stores.ui.map_tab.slic_superpixel_size.get()
+        if smallest_grain_size < 1:
+            update_logs(
+                stores,
+                ("Smallest grain size must be a positive integer.", "err"),
+                logger=logger,
+            )
+            update_progress_bar(0.0, stores)
+            return
+        if slic_superpixel_size < 5:
+            update_logs(
+                stores,
+                ("SLIC superpixel size must be an integer of at least 5.", "err"),
+                logger=logger,
+            )
+            update_progress_bar(0.0, stores)
+            return
+
         angle_map_info = segment_angle_map(
             angle_map_info,
             delta_euler_thresh=stores.ui.map_tab.segmentation_angle.get(),
+            slic_region_size=slic_superpixel_size,
+            small_region_min_area_px=smallest_grain_size**2,
         )
         stores.ui.map_tab.angle_map_info.set(angle_map_info)
         stores.ui.map_tab.angle_map_display.set(angle_map_info["angle_map_display"])
@@ -556,6 +589,18 @@ class GrainTab(ft.Container):
             parse_int,
             accept_None=False,
         )
+        smallest_grain_size = make_reactive_float_text_filed(
+            stores,
+            stores.ui.map_tab.smallest_grain_linear_size,
+            parse_smallest_grain_size,
+            accept_None=False,
+        )
+        slic_superpixel_size = make_reactive_float_text_filed(
+            stores,
+            stores.ui.map_tab.slic_superpixel_size,
+            parse_slic_superpixel_size,
+            accept_None=False,
+        )
 
         has_angle_map_source = ReactiveState(
             lambda: stores.computation_result.raw_maps.get() is not None,
@@ -654,9 +699,51 @@ class GrainTab(ft.Container):
             horizontal_alignment=ft.CrossAxisAlignment.START,
         )
 
+        advanced_settings = ft.Column(
+            [
+                ft.Row(
+                    [
+                        CustomText("Smallest grain size"),
+                        smallest_grain_size,
+                        CustomText("² px²"),
+                    ]
+                ),
+                ft.Row(
+                    [
+                        CustomText("SLIC superpixel size"),
+                        slic_superpixel_size,
+                        CustomText("² px²"),
+                    ]
+                ),
+            ],
+            visible=False,
+            spacing=4,
+        )
+        advanced_toggle_icon = ft.IconButton(
+            icon=ft.Icons.ADD,
+            icon_color=ft.Colors.BLUE_100,
+            tooltip="Advanced settings",
+        )
+
+        def toggle_advanced_settings(_e: ft.ControlEvent) -> None:
+            advanced_settings.visible = not advanced_settings.visible
+            advanced_toggle_icon.icon = (
+                ft.Icons.REMOVE if advanced_settings.visible else ft.Icons.ADD
+            )
+            advanced_settings.update()
+            advanced_toggle_icon.update()
+
+        advanced_toggle_icon.on_click = toggle_advanced_settings
+        advanced_settings_header = ft.Row(
+            [CustomText("Advanced settings"), advanced_toggle_icon],
+            spacing=0,
+        )
+
         content = ft.Column(
             [
                 angle_map_legend,
+                advanced_settings_header,
+                advanced_settings,
                 CustomText("Angle-map cleanup"),
                 ft.Row(
                     [

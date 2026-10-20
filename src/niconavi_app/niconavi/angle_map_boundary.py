@@ -254,13 +254,13 @@ def _split_labels_by_mask(labels: np.ndarray, mask: np.ndarray) -> np.ndarray:
 def _absorb_small_regions(
     labels: np.ndarray,
     *,
-    max_area_px: int,
+    min_area_px: int,
     barrier_mask: np.ndarray | None = None,
 ) -> np.ndarray:
     from scipy import ndimage as ndi
 
     labels = _split_connected_components(labels)
-    if max_area_px <= 0:
+    if min_area_px <= 1:
         return labels
 
     if barrier_mask is None:
@@ -279,7 +279,7 @@ def _absorb_small_regions(
             continue
 
         counts = np.bincount(domain_labels)
-        small_label_ids = np.flatnonzero((counts > 0) & (counts <= max_area_px))
+        small_label_ids = np.flatnonzero((counts > 0) & (counts < min_area_px))
         if small_label_ids.size == 0:
             continue
 
@@ -430,7 +430,7 @@ def segment_angle_map(
     slic_ruler: float = 20.0,
     slic_num_iterations: int = 10,
     slic_min_element_size: int = 25,
-    small_region_max_area_px: int = 3,
+    small_region_min_area_px: int = 9,
 ) -> dict[str, Any]:
     source = _as_uint8_rgb(theta_phi_angle_info.get("shock_angle_map", theta_phi_angle_info["theta_phi_angle_map"]))
     outside_circle_mask = create_outside_circle_mask(source)
@@ -491,7 +491,7 @@ def segment_angle_map(
     merged_labels = _split_connected_components(_compact_labels(merged_labels))
     merged_labels = _absorb_small_regions(
         merged_labels,
-        max_area_px=small_region_max_area_px,
+        min_area_px=small_region_min_area_px,
         barrier_mask=outside_circle_mask,
     )
     merged_superpixel_median_map = _region_median_color_map(source, merged_labels)
