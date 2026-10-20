@@ -290,6 +290,8 @@ class MapTab:
         self.shock_filter_iterator: State[Optional[Any]] = State(None)
         self.cleaning_count: State[int] = State(0)
         self.segmentation_angle: State[int] = State(5)
+        self.smallest_grain_linear_size: State[int] = State(3)
+        self.slic_superpixel_size: State[int] = State(30)
         self.fill_boundary_count: State[float] = State(0.0)
         self.segmentation_done: State[bool] = State(False)
         self.fill_boundary_started: State[bool] = State(False)
@@ -627,5 +629,3 @@ def as_ComputationResult(param: ComputationResultState) -> ComputationResult:
             raise ValueError("unexpected type occurred in ComputationResultState")
 
     return ComputationResult(**res_dict)
-
-

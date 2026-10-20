@@ -57,6 +57,8 @@ def collect_project_ui_state(stores: Stores) -> dict[str, Any]:
             "angle_map_display": map_tab.angle_map_display.get(),
             "cleaning_count": map_tab.cleaning_count.get(),
             "segmentation_angle": map_tab.segmentation_angle.get(),
+            "smallest_grain_linear_size": map_tab.smallest_grain_linear_size.get(),
+            "slic_superpixel_size": map_tab.slic_superpixel_size.get(),
             "fill_boundary_count": map_tab.fill_boundary_count.get(),
             "segmentation_done": map_tab.segmentation_done.get(),
             "fill_boundary_started": map_tab.fill_boundary_started.get(),
