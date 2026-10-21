@@ -40,6 +40,7 @@ def make_cip_button_visible_state(
         0,
         [stores.computation_result.raw_maps, stores.ui.analysis_tab.plot_option],
         lambda: stores.ui.analysis_tab.plot_option.get() == "CPO",
+        help_text="Circular median extinction angle φex calculated from the rotating XPL movie (0°–90°).",
     )
 
     azimuth = make_elevated_button(
@@ -51,6 +52,7 @@ def make_cip_button_visible_state(
         [stores.computation_result.raw_maps, stores.ui.analysis_tab.plot_option],
         lambda: exist_in_raw_maps(stores, "azimuth")
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
+        help_text="Uses the λ-plate retardations: if R(φex+45°) ≥ R(φex−45°), azimuth = 180°−φex; otherwise azimuth = 90°−φex.",
     )
 
     inclination = make_elevated_button(
@@ -62,6 +64,7 @@ def make_cip_button_visible_state(
         [stores.computation_result.raw_maps, stores.ui.analysis_tab.plot_option],
         lambda: exist_in_raw_maps(stores, "inclination")
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
+        help_text="Inclination magnitude estimated from the addition image, section thickness, and refractive indices (0°–90°).",
     )
 
     azimuth360 = make_elevated_button(
@@ -74,6 +77,7 @@ def make_cip_button_visible_state(
         [stores.computation_result.raw_maps, stores.ui.analysis_tab.plot_option],
         lambda: exist_in_raw_maps(stores, "inclination_0_to_180")
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
+        help_text="Resolves inclination as θ or 180°−θ from the colour change in the registered tilted images.",
     )
 
     # seg_extinction_angle = make_elevated_button(
@@ -144,6 +148,7 @@ def make_cip_button_visible_state(
         ],
         lambda: stores.computation_result.cip_map_info.get()["COI90"] is not None
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
+        help_text="Colour orientation map combining pixel inclination with extinction angle φex (0°–90° symmetry).",
     )
 
     coi180_map = make_elevated_button(
@@ -158,6 +163,7 @@ def make_cip_button_visible_state(
         ],
         lambda: stores.computation_result.cip_map_info.get()["COI180"] is not None
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
+        help_text="Colour orientation map combining pixel inclination with λ-plate-derived azimuth (0°–180°).",
     )
 
     coi360_map = make_elevated_button(
@@ -172,6 +178,7 @@ def make_cip_button_visible_state(
         ],
         lambda: stores.computation_result.cip_map_info.get()["COI360"] is not None
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
+        help_text="Colour orientation map using the tilt-resolved 0°–360° axis direction.",
     )
 
     # coi90_grain = make_elevated_button(
@@ -228,6 +235,7 @@ def make_cip_button_visible_state(
         ],
         lambda: stores.computation_result.cip_map_info.get()["polar_info90"] is not None
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
+        help_text="Polar distribution of classified-grain inclination and extinction angle φex (0°–90° symmetry).",
     )
 
     polar180 = make_elevated_button(
@@ -243,6 +251,7 @@ def make_cip_button_visible_state(
         lambda: stores.computation_result.cip_map_info.get()["polar_info180"]
         is not None
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
+        help_text="Polar distribution of classified-grain inclination and λ-plate-derived azimuth (0°–180°).",
     )
 
     polar360 = make_elevated_button(
@@ -258,6 +267,7 @@ def make_cip_button_visible_state(
         lambda: stores.computation_result.cip_map_info.get()["polar_info360"]
         is not None
         and (stores.ui.analysis_tab.plot_option.get() == "CPO"),
+        help_text="Polar distribution of classified-grain orientations after resolving the 0°–360° axis direction from tilted images.",
     )
 
     # Grain-center RGB regression figures, produced by "calculate": one button
@@ -275,6 +285,7 @@ def make_cip_button_visible_state(
             stores.ui.analysis_tab.plot_option,
         ],
         lambda: stores.ui.analysis_tab.plot_option.get() == "CPO",
+        help_text="Regression of predicted versus observed grain-centre RGB values before colour correction.",
     )
 
     rgb_after = make_elevated_button(
@@ -288,6 +299,7 @@ def make_cip_button_visible_state(
             stores.ui.analysis_tab.plot_option,
         ],
         lambda: stores.ui.analysis_tab.plot_option.get() == "CPO",
+        help_text="Regression of colour-corrected predicted versus observed grain-centre RGB values.",
     )
 
     return (

@@ -7,6 +7,7 @@ from niconavi_app.reactive_state import (
 from niconavi_app.stores import Stores
 from niconavi_app.state import ReactiveState, State
 from niconavi_app.state import StateProperty  # type: ignore
+from niconavi_app.components.context_help import set_context_help
 import flet as ft
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import Figure, Axes
@@ -66,6 +67,8 @@ def make_elevated_button(
     button_index: int,  # ボタンの固有index
     additional_condition: list[State] = [],
     additional_formula: Callable[[], bool] = lambda: True,
+    *,
+    help_text: str | None = None,
 ) -> ReactiveElevatedButtonInSelector:
 
     def click_button() -> None:
@@ -89,6 +92,9 @@ def make_elevated_button(
         on_click=lambda e: click_button(),
     )
 
+    if help_text is not None:
+        set_context_help(button, help_text)
+
     return button
 
 
@@ -100,6 +106,8 @@ def make_check_prompt_button(
     button_index: int,  # ボタンの固有index
     additional_condition: list[State] = [],
     additional_formula: Callable[[], bool] = lambda: True,
+    *,
+    help_text: str | None = None,
 ) -> ReactiveElevatedButtonInSelector:
     """Like make_elevated_button, but the button is shown red until the user
     clicks it once ("check prompt"): it nudges the user to open and confirm a
@@ -141,6 +149,9 @@ def make_check_prompt_button(
         bgcolor=bgcolor,
         on_click=lambda e: click_button(),
     )
+
+    if help_text is not None:
+        set_context_help(button, help_text)
 
     return button
 

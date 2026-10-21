@@ -42,6 +42,7 @@ def make_grain_classification_button_visible_state(
         selected_index,
         0,
         [stores.computation_result.raw_maps],
+        help_text="Rotating XPL frame nearest to φ = 0°.",
     )
 
     degree_22_5 = make_elevated_button(
@@ -51,6 +52,7 @@ def make_grain_classification_button_visible_state(
         selected_index,
         1,
         [stores.computation_result.raw_maps],
+        help_text="Rotating XPL frame nearest to φ = 22.5°.",
     )
 
     degree_45 = make_elevated_button(
@@ -60,6 +62,7 @@ def make_grain_classification_button_visible_state(
         selected_index,
         2,
         [stores.computation_result.raw_maps],
+        help_text="Rotating XPL frame nearest to φ = 45°.",
     )
 
     degree_67_5 = make_elevated_button(
@@ -69,6 +72,7 @@ def make_grain_classification_button_visible_state(
         selected_index,
         3,
         [stores.computation_result.raw_maps],
+        help_text="Rotating XPL frame nearest to φ = 67.5°.",
     )
 
     extinction_angle = make_elevated_button(
@@ -78,6 +82,7 @@ def make_grain_classification_button_visible_state(
         selected_index,
         4,
         [stores.computation_result.raw_maps],
+        help_text="Circular median of four 90°-periodic extinction-angle estimates from the rotating XPL movie.",
     )
 
     R_color = make_elevated_button(
@@ -87,6 +92,7 @@ def make_grain_classification_button_visible_state(
         selected_index,
         5,
         [stores.computation_result.raw_maps],
+        help_text="XPL colour sampled at φex + 45° for each pixel, where birefringence is maximal.",
     )
 
     angle_map = make_elevated_button(
@@ -97,6 +103,7 @@ def make_grain_classification_button_visible_state(
         21,
         [stores.ui.map_tab.angle_map_display],
         lambda: stores.ui.map_tab.angle_map_display.get() is not None,
+        help_text="Orientation colour map built from extinction angle and dark-to-bright XPL colour change; cleaning and segmentation update it.",
     )
 
     extinction_color = make_check_prompt_button(
@@ -106,6 +113,7 @@ def make_grain_classification_button_visible_state(
         selected_index,
         6,
         [stores.computation_result.raw_maps],
+        help_text="XPL colour sampled at each pixel's extinction angle φex.",
     )
 
     grain_map = make_elevated_button(
@@ -115,6 +123,7 @@ def make_grain_classification_button_visible_state(
         selected_index,
         7,
         [stores.computation_result.grain_map],
+        help_text="Grain labels obtained by merging neighbouring SLIC regions with similar orientations.",
     )
 
     # grain_map_with_boundary = make_elevated_button(
@@ -139,6 +148,7 @@ def make_grain_classification_button_visible_state(
         10,
         [stores.computation_result.raw_maps],
         lambda: exist_in_raw_maps(stores, "p45_R_color_map"),
+        help_text="XPL + λ-plate colour sampled at φex + 45° for each pixel.",
     )
 
     m45_R_color_map = make_elevated_button(
@@ -149,6 +159,7 @@ def make_grain_classification_button_visible_state(
         11,
         [stores.computation_result.raw_maps],
         lambda: exist_in_raw_maps(stores, "m45_R_color_map"),
+        help_text="XPL + λ-plate colour sampled at φex − 45° for each pixel.",
     )
 
     azimuth = make_elevated_button(
@@ -159,6 +170,7 @@ def make_grain_classification_button_visible_state(
         14,
         [stores.computation_result.raw_maps],
         lambda: exist_in_raw_maps(stores, "azimuth"),
+        help_text="Uses the λ-plate retardations: if R(φex+45°) ≥ R(φex−45°), azimuth = 180°−φex; otherwise azimuth = 90°−φex.",
     )
 
     tilt0 = make_elevated_button(
@@ -169,6 +181,7 @@ def make_grain_classification_button_visible_state(
         15,
         [stores.computation_result.tilt_image_info.tilt_image0],
         lambda: stores.computation_result.tilt_image_info.tilt_image0.get() is not None,
+        help_text="Focus-stacked and registered 0° tilted image.",
     )
 
     tilt45 = make_elevated_button(
@@ -180,6 +193,7 @@ def make_grain_classification_button_visible_state(
         [stores.computation_result.tilt_image_info.tilt_image45],
         lambda: stores.computation_result.tilt_image_info.tilt_image45.get()
         is not None,
+        help_text="Focus-stacked and registered 45° tilted image.",
     )
 
     horiz0 = make_elevated_button(
@@ -190,6 +204,7 @@ def make_grain_classification_button_visible_state(
         17,
         [stores.computation_result.tilt_image_info.tilt_image0],
         lambda: stores.computation_result.tilt_image_info.tilt_image0.get() is not None,
+        help_text="Aligned horizontal reference image paired with the 0° tilted image.",
     )
 
     horiz45 = make_elevated_button(
@@ -201,6 +216,7 @@ def make_grain_classification_button_visible_state(
         [stores.computation_result.tilt_image_info.tilt_image45],
         lambda: stores.computation_result.tilt_image_info.tilt_image45.get()
         is not None,
+        help_text="Aligned horizontal reference image paired with the 45° tilted image.",
     )
 
     # quality = make_elevated_button(
@@ -221,6 +237,7 @@ def make_grain_classification_button_visible_state(
         20,
         [stores.computation_result.mask],
         lambda: stores.computation_result.mask.get() is not None,
+        help_text="Binary mask identifying pixels excluded from map and grain calculations.",
     )
 
     add_image = make_elevated_button(
@@ -231,6 +248,7 @@ def make_grain_classification_button_visible_state(
         22,
         [stores.computation_result.raw_maps],
         lambda: exist_in_raw_maps(stores, "add_image"),
+        help_text="For each pixel, selects the φex ± 45° λ-plate colour with the larger estimated retardation.",
     )
 
     color_change0 = make_check_prompt_button(
@@ -241,6 +259,7 @@ def make_grain_classification_button_visible_state(
         23,
         [stores.computation_result.tilt_image_info.tilt_image0],
         lambda: stores.computation_result.tilt_image_info.tilt_image0.get() is not None,
+        help_text="Signed RGB difference between the registered 0° tilted and horizontal images, amplified 3×; neutral gray means no change.",
     )
 
     color_change45 = make_check_prompt_button(
@@ -252,6 +271,7 @@ def make_grain_classification_button_visible_state(
         [stores.computation_result.tilt_image_info.tilt_image45],
         lambda: stores.computation_result.tilt_image_info.tilt_image45.get()
         is not None,
+        help_text="Signed RGB difference between the registered 45° tilted and horizontal images, amplified 3×; neutral gray means no change.",
     )
 
 

@@ -1,45 +1,32 @@
-"""Context-sensitive help mode for the Images and settings panels.
-
-The controller temporarily intercepts events from the controls that are visible
-when help mode starts.  It restores both handlers and displayed values when help
-mode ends, so asking for help can never run an action or alter a parameter.
-"""
+"""Delayed, concise hover help for NicoNavi controls."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-import json
 import re
-from typing import Any, Callable, Iterable
+import textwrap
+from typing import Any
 
 import flet as ft
 
-from niconavi_app.components.common_component import CustomText
+
+HELP_WAIT_MS = 2000
+HELP_SHOW_MS = 15000
+HELP_WRAP_COLUMNS = 58
 
 
-@dataclass(frozen=True)
-class HelpTopic:
-    title: str
-    body: str
-
-
-@dataclass
-class _InterceptedControl:
-    control: ft.Control
-    handlers: dict[str, Callable[..., Any] | None] = field(default_factory=dict)
-    properties: dict[str, Any] = field(default_factory=dict)
-
-
-def set_context_help(control: ft.Control, body: str) -> ft.Control:
-    """Attach purpose-written help text while keeping the original control type."""
-    setattr(control, "_context_help_body", body)
-    return control
-
-
-def suppress_context_help(control: ft.Control) -> ft.Control:
-    """Keep an obvious control inert in help mode without opening a dialog."""
-    setattr(control, "_context_help_suppress", True)
-    return control
+TAB_HELP = (
+    "Video tab: select the required rotated XPL movie, optional supporting "
+    "movies, specimen thickness, and acquisition settings.",
+    "Center tab: set the rotation centre of the XPL video, then calculate "
+    "the aligned optical maps.",
+    "Map tab: clean the orientation map, segment grains, fill boundary "
+    "regions, and confirm the grain boundaries.",
+    "Filter tab: create labels and mark example grains so the software can "
+    "classify the remaining grains.",
+    "Analysis tab: choose a plot or CPO result and adjust how the processed "
+    "grain data are displayed.",
+    "Function tab: run optional processing tools that are enabled for this build.",
+)
 
 
 def _normalise(text: str) -> str:
@@ -55,36 +42,33 @@ def _text_value(value: Any) -> str:
 
 
 def _direct_labels(control: ft.Control) -> list[str]:
-    labels: list[str] = []
-    for child in control._get_children():
-        if isinstance(child, ft.Text):
-            value = _text_value(child)
-            if value:
-                labels.append(value)
-    return labels
+    return [
+        value
+        for child in control._get_children()
+        if isinstance(child, ft.Text)
+        if (value := _text_value(child))
+    ]
 
 
 def _control_title(control: ft.Control, context: tuple[str, ...]) -> str:
     label = _text_value(getattr(control, "label", None))
     text = _text_value(getattr(control, "text", None))
-    tooltip = _text_value(getattr(control, "tooltip", None))
+    tooltip = getattr(control, "tooltip", None)
+    tooltip_text = _text_value(tooltip)
     hint = _text_value(getattr(control, "hint_text", None))
     value = _text_value(getattr(control, "value", None))
     context_text = " ".join(context).strip()
 
-    if isinstance(control, ft.Tabs):
-        return "Workflow tabs"
     if isinstance(control, ft.PopupMenuButton):
         return "File menu"
     if isinstance(control, ft.IconButton):
+        if tooltip_text:
+            return tooltip_text
         icon = str(control.icon or "").lower()
-        if tooltip:
-            return tooltip
         if "remove" in icon:
             return f"Decrease {context_text}".strip()
         if "add" in icon:
             return f"Increase {context_text}".strip()
-        return tooltip or context_text or "Icon button"
     if control.__class__.__name__ == "CustomSelectFileButton":
         return context_text or text or "Select input file"
     if label:
@@ -92,23 +76,22 @@ def _control_title(control: ft.Control, context: tuple[str, ...]) -> str:
     if text and _normalise(text) not in {"select", "not selected"}:
         return text
     if isinstance(control, ft.Dropdown):
-        return context_text or hint or value or "Selection"
+        return context_text or hint or value or "this selection"
     if isinstance(control, ft.TextField):
-        return context_text or label or hint or "Parameter"
+        return context_text or hint or "this parameter"
     if isinstance(control, ft.RadioGroup):
-        return context_text or "Selection"
+        return context_text or "this selection"
     if isinstance(control, ft.Slider):
-        return context_text or "Slider"
-    return tooltip or context_text or text or control.__class__.__name__
+        return context_text or "this value"
+    return tooltip_text or context_text or text or control.__class__.__name__
 
 
 def _specific_body(title: str) -> str | None:
     name = _normalise(title)
-
     rules: tuple[tuple[tuple[str, ...], str], ...] = (
         (
             ("image width",),
-            "Sets the physical width of the displayed field in micrometres. A larger value increases reported physical grain sizes; it does not change the image pixels.",
+            "Sets the physical width of the displayed field in micrometres.",
         ),
         (
             ("apply mask",),
@@ -116,10 +99,10 @@ def _specific_body(title: str) -> str | None:
         ),
         (
             ("calculate grain boundaries",),
-            "Creates grain boundaries from the current map and segmentation settings.",
+            "Creates grain boundaries from the current angle map and segmentation settings.",
         ),
         (
-            ("gbs", "grain boundaries"),
+            ("gbs",),
             "Shows or hides the grain-boundary overlay without recalculating the grains.",
         ),
         (
@@ -208,15 +191,27 @@ def _specific_body(title: str) -> str | None:
         ),
         (
             ("continue",),
-            "Runs the next workflow step using the current result. Later results may be replaced when an earlier step is run again.",
-        ),
-        (
-            ("workflow tabs",),
-            "Moves between the available workflow stages. Complete the tabs from left to right; later tabs appear as results become available.",
+            "Finishes this step and moves to the next tab.",
         ),
         (
             ("file menu",),
             "Opens commands for saving or loading a project and exporting results.",
+        ),
+        (
+            ("save project",),
+            "Saves the input paths, settings, and calculated results in a NicoNavi project file.",
+        ),
+        (
+            ("load project",),
+            "Loads a saved NicoNavi project and restores its available workflow results.",
+        ),
+        (
+            ("export image",),
+            "Exports the image currently shown in the main view as a PDF.",
+        ),
+        (
+            ("export grain data",),
+            "Exports calculated grain measurements and related tables for use outside NicoNavi.",
         ),
         (
             ("calculate",),
@@ -228,7 +223,7 @@ def _specific_body(title: str) -> str | None:
         ),
         (
             ("add label",),
-            "Adds a new filter label using the name entered in the Label name box. Select the new label before marking example grains.",
+            "Adds a new filter label using the name entered on the left. Select the new label before marking example grains.",
         ),
         (
             ("label name",),
@@ -265,6 +260,14 @@ def _specific_body(title: str) -> str | None:
         (
             ("training boxes",),
             "Shows or hides the marked training examples used for filtering. This changes the overlay only.",
+        ),
+        (
+            ("color theme",),
+            "Chooses the colour palette used for the polar plot. This changes appearance only.",
+        ),
+        (
+            ("color mode",),
+            "Chooses stepped or smoothly varying colours for the polar plot. This changes appearance only.",
         ),
         (
             ("color",),
@@ -336,14 +339,6 @@ def _specific_body(title: str) -> str | None:
             "Shows or hides individual measurements on top of the polar density plot.",
         ),
         (
-            ("color theme",),
-            "Chooses the colour palette used for the polar plot. This changes appearance only.",
-        ),
-        (
-            ("color mode",),
-            "Chooses stepped or smoothly varying colours for the polar plot. This changes appearance only.",
-        ),
-        (
             ("group by",),
             "Chooses whether the analysis represents individual pixels or whole grains.",
         ),
@@ -358,278 +353,120 @@ def _specific_body(title: str) -> str | None:
     return None
 
 
-TAB_HELP = (
-    "Video tab: select the required rotated XPL movie, optional supporting movies, specimen thickness, and acquisition settings.",
-    "Center tab: set the rotation centre of the XPL video, then calculate the aligned optical maps.",
-    "Map tab: clean the orientation map, segment grains, fill boundary regions, and confirm the grain boundaries.",
-    "Filter tab: create labels and mark example grains so the software can classify the remaining grains.",
-    "Analysis tab: choose a plot or CPO result and adjust how the processed grain data are displayed.",
-    "Function tab: run optional processing tools that are enabled for this build.",
-)
+def _wrap_help(body: str) -> str:
+    paragraphs = body.splitlines() or [body]
+    return "\n".join(
+        textwrap.fill(
+            paragraph,
+            width=HELP_WRAP_COLUMNS,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        for paragraph in paragraphs
+    )
 
 
-def _clicked_tab_index(control: ft.Tabs, event: Any | None) -> int:
-    data = getattr(event, "data", None)
-    if isinstance(data, str):
-        try:
-            decoded = json.loads(data)
-            if isinstance(decoded, dict):
-                data = decoded.get("index", decoded.get("selected_index"))
-            else:
-                data = decoded
-        except (json.JSONDecodeError, TypeError):
-            pass
-    try:
-        return int(data)
-    except (TypeError, ValueError):
-        return int(control.selected_index or 0)
+def make_help_tooltip(body: str) -> ft.Tooltip:
+    return ft.Tooltip(
+        message=_wrap_help(body),
+        wait_duration=HELP_WAIT_MS,
+        show_duration=HELP_SHOW_MS,
+        padding=12,
+        bgcolor="#fff7f7f7",
+        border_radius=6,
+        text_style=ft.TextStyle(color=ft.Colors.BLACK87, size=13),
+        text_align=ft.TextAlign.LEFT,
+        enable_tap_to_dismiss=True,
+    )
 
 
-def resolve_help_topic(
+def set_context_help(control: ft.Control, body: str) -> ft.Control:
+    """Attach purpose-written delayed hover help to a control."""
+    setattr(control, "_context_help_body", body)
+    control.tooltip = make_help_tooltip(body)
+    return control
+
+
+def suppress_context_help(control: ft.Control) -> ft.Control:
+    """Remove hover help from a self-explanatory control."""
+    setattr(control, "_context_help_suppress", True)
+    control.tooltip = None
+    return control
+
+
+def _is_interactive(control: ft.Control) -> bool:
+    if isinstance(
+        control,
+        (
+            ft.TextField,
+            ft.Dropdown,
+            ft.RadioGroup,
+            ft.Slider,
+            ft.Checkbox,
+            ft.Switch,
+            ft.PopupMenuButton,
+        ),
+    ):
+        return True
+    return any(
+        hasattr(control, event_name) and getattr(control, event_name) is not None
+        for event_name in ("on_click", "on_change", "on_tap")
+    )
+
+
+def _help_body(
     control: ft.Control,
     *,
     area: str,
-    context: tuple[str, ...] = (),
-    event: Any | None = None,
-) -> HelpTopic:
-    """Return concise user-facing help for a control."""
+    context: tuple[str, ...],
+) -> str | None:
+    explicit = getattr(control, "_context_help_body", None)
+    if isinstance(explicit, str):
+        return explicit
+
     title = _control_title(control, context)
-    explicit_body = getattr(control, "_context_help_body", None)
-    if isinstance(explicit_body, str):
-        return HelpTopic(title=title, body=explicit_body)
-    if isinstance(control, ft.Tabs):
-        index = _clicked_tab_index(control, event)
-        body = TAB_HELP[index] if 0 <= index < len(TAB_HELP) else TAB_HELP[0]
-        return HelpTopic(title=title, body=body)
     if area == "images":
-        return HelpTopic(
-            title=title,
-            body=(
-                f"Displays {title} in the main image view. "
-                "Changing the displayed image does not recalculate the results."
-            ),
-        )
+        # Image selectors carry calculation-specific help at their definition.
+        # Do not replace a missing description with repetitive display text.
+        return None
+
     specific = _specific_body(title)
     if specific is not None:
-        return HelpTopic(title=title, body=specific)
+        return specific
     if isinstance(control, ft.TextField):
-        body = (
-            "Sets this parameter for the next calculation. Enter a valid value; "
-            "larger values increase the setting and smaller values reduce it."
+        return (
+            f"Sets {title}. The new value is used the next time the related "
+            "calculation or plot is updated."
         )
-    elif isinstance(control, (ft.Dropdown, ft.RadioGroup)):
-        body = (
-            "Chooses how the current result is calculated or displayed. "
-            "Select the option that matches the result you want to inspect."
+    if isinstance(control, (ft.Dropdown, ft.RadioGroup)):
+        return (
+            f"Chooses {title}. The current plot or display updates to use the "
+            "selected option."
         )
-    elif isinstance(control, (ft.Checkbox, ft.Switch)):
-        body = (
-            "Turns this option on or off. The enabled state applies the option "
-            "to the current display or the next calculation."
-        )
-    elif isinstance(control, ft.Slider):
-        body = (
-            "Adjusts this display setting. Moving right increases the value; "
-            "moving left decreases it."
-        )
-    else:
-        body = f"Selects {title} for the current operation or display."
-    return HelpTopic(title=title, body=body)
+    if isinstance(control, (ft.Checkbox, ft.Switch)):
+        return f"Turns {title} on or off for the current display or calculation."
+    if isinstance(control, ft.Slider):
+        return f"Adjusts {title}. Moving right increases the value."
+    return None
 
 
-class ContextHelpController:
-    """Own the help-mode lifecycle and restore intercepted controls exactly."""
+def attach_context_help(root: ft.Control, *, area: str) -> None:
+    """Attach hover help throughout one layout subtree."""
+    seen: set[int] = set()
 
-    ACTIVE_COLOR = ft.Colors.ORANGE_400
-    INACTIVE_COLOR = ft.Colors.WHITE
-
-    def __init__(self, page: ft.Page) -> None:
-        self.page = page
-        self.active = False
-        self._scopes: list[tuple[ft.Control, str]] = []
-        self._intercepted: list[_InterceptedControl] = []
-        self._buttons: list[ft.IconButton] = []
-        self._dialog: ft.AlertDialog | None = None
-
-    def add_scope(self, root: ft.Control, *, area: str) -> None:
-        """Register one layout subtree as a source of contextual help."""
-        self._scopes.append((root, area))
-
-    def create_button(self) -> ft.IconButton:
-        button = ft.IconButton(
-            icon=ft.Icons.HELP_OUTLINE,
-            icon_color=self.INACTIVE_COLOR,
-            tooltip="Context help",
-            on_click=lambda _: self.toggle(),
-        )
-        setattr(button, "_context_help_excluded", True)
-        self._buttons.append(button)
-        return button
-
-    def toggle(self) -> None:
-        if self.active:
-            self.deactivate()
-        else:
-            self.activate()
-
-    def show_text(self, body: str) -> None:
-        """Open purpose-written help from a control with custom click handling."""
-        if self.active:
-            self._open_help(HelpTopic(title="", body=body))
-
-    def activate(self) -> None:
-        if self.active:
-            return
-        self.active = True
-        seen: set[int] = set()
-        for root, area in self._scopes:
-            self._intercept_tree(root, area=area, context=(), seen=seen)
-        self._sync_button_colors()
-        self._safe_page_update()
-
-    def deactivate(self, *, close_dialog: bool = True) -> None:
-        if close_dialog and self._dialog is not None:
-            self.page.close(self._dialog)
-        self._dialog = None
-        for record in reversed(self._intercepted):
-            for event_name, handler in record.handlers.items():
-                setattr(record.control, event_name, handler)
-            for property_name, value in record.properties.items():
-                setattr(record.control, property_name, value)
-        self._intercepted.clear()
-        self.active = False
-        self._sync_button_colors()
-        self._safe_page_update()
-
-    def _intercept_tree(
-        self,
-        control: ft.Control,
-        *,
-        area: str,
-        context: tuple[str, ...],
-        seen: set[int],
-    ) -> None:
-        if id(control) in seen or getattr(control, "_context_help_excluded", False):
+    def visit(control: ft.Control, context: tuple[str, ...]) -> None:
+        if id(control) in seen:
             return
         seen.add(id(control))
-        if control.visible is False:
-            return
 
-        local_labels = tuple(_direct_labels(control))
-        child_context = local_labels or context
-        event_names = self._help_event_names(control)
-        if event_names:
-            self._intercept(
-                control,
-                event_names,
-                area=area,
-                context=context,
-                suppress=bool(getattr(control, "_context_help_suppress", False)),
-            )
+        labels = tuple(_direct_labels(control))
+        child_context = (*context, *labels) if labels else context
+        if not getattr(control, "_context_help_suppress", False):
+            body = _help_body(control, area=area, context=context)
+            if body is not None and _is_interactive(control):
+                set_context_help(control, body)
 
         for child in control._get_children():
-            self._intercept_tree(
-                child,
-                area=area,
-                context=child_context,
-                seen=seen,
-            )
+            visit(child, child_context)
 
-    @staticmethod
-    def _help_event_names(control: ft.Control) -> tuple[str, ...]:
-        if isinstance(control, ft.TextField):
-            return ("on_click", "on_change", "on_submit")
-        if isinstance(control, ft.Tabs):
-            return ("on_click", "on_change")
-        if isinstance(control, ft.PopupMenuButton):
-            return ("on_open",)
-
-        names: list[str] = []
-        for event_name in ("on_click", "on_change", "on_tap"):
-            if (
-                hasattr(control, event_name)
-                and getattr(control, event_name) is not None
-            ):
-                names.append(event_name)
-        return tuple(names)
-
-    def _intercept(
-        self,
-        control: ft.Control,
-        event_names: Iterable[str],
-        *,
-        area: str,
-        context: tuple[str, ...],
-        suppress: bool,
-    ) -> None:
-        record = _InterceptedControl(control=control)
-        property_names = ["disabled", "value", "selected_index"]
-        if isinstance(control, ft.TextField):
-            property_names.extend(("read_only", "always_call_on_tap"))
-        for property_name in property_names:
-            if hasattr(control, property_name):
-                record.properties[property_name] = getattr(control, property_name)
-        if "disabled" in record.properties:
-            control.disabled = False
-        if isinstance(control, ft.TextField):
-            # Editable fields use the first tap to request focus. Read-only mode
-            # lets that same tap reach on_click immediately while help is active.
-            control.read_only = True
-            control.always_call_on_tap = True
-
-        def handle_help_event(event: Any) -> None:
-            topic = resolve_help_topic(
-                control,
-                area=area,
-                context=context,
-                event=event,
-            )
-            for property_name, value in record.properties.items():
-                if property_name != "disabled":
-                    setattr(control, property_name, value)
-            if not suppress:
-                self._open_help(topic)
-
-        for event_name in event_names:
-            record.handlers[event_name] = getattr(control, event_name)
-            setattr(control, event_name, handle_help_event)
-        self._intercepted.append(record)
-
-    def _open_help(self, topic: HelpTopic) -> None:
-        if not self.active or self._dialog is not None:
-            return
-
-        def close_help(_: ft.ControlEvent) -> None:
-            dialog = self._dialog
-            self._dialog = None
-            if dialog is not None:
-                self.page.close(dialog)
-            self.deactivate(close_dialog=False)
-
-        self._dialog = ft.AlertDialog(
-            modal=True,
-            bgcolor="#ff333333",
-            surface_tint_color=ft.Colors.TRANSPARENT,
-            content=ft.SelectionArea(CustomText(topic.body)),
-            actions=[
-                ft.TextButton(
-                    "Close",
-                    style=ft.ButtonStyle(color=ft.Colors.LIGHT_BLUE_200),
-                    on_click=close_help,
-                )
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        self.page.open(self._dialog)
-
-    def _sync_button_colors(self) -> None:
-        color = self.ACTIVE_COLOR if self.active else self.INACTIVE_COLOR
-        for button in self._buttons:
-            button.icon_color = color
-
-    def _safe_page_update(self) -> None:
-        try:
-            self.page.update()
-        except AssertionError:
-            # Unit tests and controls built before mounting do not have a page.
-            pass
+    visit(root, ())
