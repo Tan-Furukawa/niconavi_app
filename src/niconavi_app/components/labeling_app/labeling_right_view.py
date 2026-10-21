@@ -18,6 +18,10 @@ from niconavi_app.components.common_component import (
     confirm_discard_downstream,
     FILTER_TAB_STAGE,
 )
+from niconavi_app.components.context_help import (
+    set_context_help,
+    suppress_context_help,
+)
 from niconavi_app.components.log_view import update_logs
 
 
@@ -302,6 +306,7 @@ def create_labeling_right_container(
         icon_color=ft.Colors.BLUE_100,
         tooltip="Feature settings",
     )
+    suppress_context_help(feature_toggle_icon)
 
     def toggle_feature_controls(_e) -> None:
         feature_checkbox_row.visible = not feature_checkbox_row.visible
@@ -339,6 +344,11 @@ def create_labeling_right_container(
         value=labeling.overlay_alpha.get(),
         on_change=controller.handle_overlay_opacity_change,
         disabled=not labeling._loaded.get(),
+    )
+    set_context_help(
+        overlay_slider,
+        "Controls the opacity of label, boundary, and prediction overlays in "
+        "the filter view. Moving right makes overlays more visible.",
     )
     overlay_slider.expand = True
 
@@ -414,6 +424,12 @@ def create_labeling_right_container(
         text="Save",
         icon=ft.Icons.CHECK,
         on_click=on_done_clicked,
+    )
+    set_context_help(
+        done_button,
+        "Saves the current filter labels and uses the marked examples to "
+        "classify the remaining grains. Existing analysis results based on "
+        "older labels are replaced.",
     )
 
     def sync_done_button_enabled() -> None:

@@ -16,6 +16,7 @@ from niconavi_app.components.labeling_app.ui_theme import (
     apply_border,
 )
 from niconavi_app.components.common_component import CustomTextField
+from niconavi_app.components.context_help import set_context_help
 
 
 class LabelSelectionPane:
@@ -66,6 +67,16 @@ class LabelSelectionPane:
             # icon_color=TEXT_COLOR,
             # style=ICON_BUTTON_STYLE,
         )
+        set_context_help(
+            self.new_label_field,
+            "Names a new grain class for filtering. Use a short mineral or "
+            "category name, then select the + button to add it.",
+        )
+        set_context_help(
+            self.add_button,
+            "Adds a new filter label using the name entered on the left. "
+            "Select the new label before marking example grains.",
+        )
         self._input_row = ft.Row(
             controls=[self.new_label_field, self.add_button],
             alignment=ft.MainAxisAlignment.START,
@@ -78,6 +89,11 @@ class LabelSelectionPane:
             value=None,
             on_change=self._handle_selection_changed,
             content=self._radio_column,
+        )
+        set_context_help(
+            self.radio_group,
+            "Selects the label assigned to grains you mark next. Changing the "
+            "active label does not alter grains that were already marked.",
         )
         self.radio_group.visible = False
 
@@ -121,6 +137,11 @@ class LabelSelectionPane:
             data=class_id,
             on_click=self._handle_color_clicked,
         )
+        set_context_help(
+            color_swatch,
+            "Opens the colour choices for this label. The selected colour is "
+            "used only to identify the class in overlays and exported results.",
+        )
         remove_button = ft.IconButton(
             icon=ft.Icons.REMOVE_CIRCLE,
             tooltip=f"Remove {label_name}",
@@ -128,6 +149,11 @@ class LabelSelectionPane:
             on_click=self._handle_remove_clicked,
             icon_color=ft.Colors.BLUE_100,
             # style=ICON_BUTTON_STYLE,
+        )
+        set_context_help(
+            remove_button,
+            "Removes this filter label and its marked training examples. "
+            "Other labels are not changed.",
         )
         label_with_color = ft.Row(
             controls=[color_swatch, radio],

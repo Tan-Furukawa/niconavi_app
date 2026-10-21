@@ -27,6 +27,7 @@ from niconavi_app.components.common_component import (
     CustomText,
     ReactiveFloatTextField,
 )
+from niconavi_app.components.context_help import set_context_help
 from niconavi_app.tools.tools import switch_tab_index, force_update_image_view
 from niconavi_app.components.log_view import update_logs
 from niconavi_app.match_used_name import (
@@ -788,12 +789,29 @@ class AnalysisTab(ft.Container):
             ],
             on_change=lambda e: analysis_tab.plot_option.set(e.control.value),
         )
+        set_context_help(
+            plot_option,
+            "Chooses the analysis view. Rose diagram shows directional "
+            "distributions, histogram shows one variable, scatter compares two "
+            "variables, SPO shows grain shape orientation, and CPO estimates "
+            "crystallographic orientation.",
+        )
 
         mineral_list = make_mineral_list_Row(stores)
 
         drop_rose_diagram = make_drop_rose_diagram(stores)
         # drop_rose_diagram_at_pixel = make_drop_rose_diagram_at_pixel(stores)
         drop_histogram = make_drop_histogram_at_grain(stores)
+        set_context_help(
+            drop_rose_diagram,
+            "Chooses the grain property represented by the rose diagram. "
+            "Select the property whose directional distribution you want to compare.",
+        )
+        set_context_help(
+            drop_histogram,
+            "Chooses the grain property counted along the histogram axis. "
+            "Changing it redraws the plot without changing grain measurements.",
+        )
         histogram_log_x_checkbox = make_histogram_log_checkbox(stores)
         rose_stat_method = make_grain_stat_method_radio(
             stores,
@@ -825,8 +843,23 @@ class AnalysisTab(ft.Container):
             divisions=20,
             on_change=lambda e: _on_histogram_alpha_change(float(e.control.value)),
         )
+        set_context_help(
+            histogram_alpha_slider,
+            "Controls histogram bar opacity. Moving right makes the bars more "
+            "solid; it does not change the counts.",
+        )
         drop_scatter_target_x = make_drop_scatter_target_x(stores)
         drop_scatter_target_y = make_drop_scatter_target_y(stores)
+        set_context_help(
+            drop_scatter_target_x,
+            "Chooses the grain property plotted on the horizontal axis. "
+            "Changing it redraws the scatter plot without changing the measurements.",
+        )
+        set_context_help(
+            drop_scatter_target_y,
+            "Chooses the grain property plotted on the vertical axis. "
+            "Changing it redraws the scatter plot without changing the measurements.",
+        )
         scatter_x_stat_method = make_grain_stat_method_radio(
             stores,
             label="X value",
@@ -855,12 +888,37 @@ class AnalysisTab(ft.Container):
         scatter_log_x = make_scatter_log_x_checkbox(stores)
         scatter_log_y = make_scatter_log_y_checkbox(stores)
         cip_point_noise_input = make_cip_noise_size_pint(stores)
+        set_context_help(
+            no,
+            "Sets the ordinary refractive index used for CPO inclination. "
+            "Keep the quartz default unless the analysed mineral is different.",
+        )
+        set_context_help(
+            ne,
+            "Sets the extraordinary refractive index used for CPO inclination. "
+            "Keep the quartz default unless the analysed mineral is different.",
+        )
+        set_context_help(
+            pixel_or_grain_radio,
+            "Chooses whether the CPO plot counts individual pixels or gives each "
+            "grain one contribution. Grain mode prevents large grains from dominating.",
+        )
+        set_context_help(
+            cip_start_button,
+            "Calculates CPO and inclination results from the selected grain labels, "
+            "section thickness, and refractive indices. Existing CPO results are replaced.",
+        )
         rose_alpha_slider = ReactiveSlider(
             value=stores.ui.analysis_tab.rose_alpha,
             min=0.0,
             max=1.0,
             divisions=20,
             on_change=lambda e: _on_rose_alpha_change(float(e.control.value)),
+        )
+        set_context_help(
+            rose_alpha_slider,
+            "Controls rose-diagram sector opacity. Moving right makes the sectors "
+            "more solid; it does not change the distribution.",
         )
 
         histogram_bins_input = make_reactive_float_text_filed(

@@ -20,6 +20,7 @@ def make_movie_selection_button_visible_state(
         0,
         0,
         [stores.computation_result.video_path],
+        help_text="First frame of the rotating XPL movie, with the selected white-balance correction.",
     )
 
     full_wave = make_elevated_button(
@@ -29,6 +30,7 @@ def make_movie_selection_button_visible_state(
         0,
         1,
         [stores.computation_result.reta_video_path],
+        help_text="First frame of the rotating XPL + λ-plate movie.",
     )
 
     tilt0 = make_elevated_button(
@@ -39,6 +41,7 @@ def make_movie_selection_button_visible_state(
         0,
         2,
         [stores.computation_result.tilt_image_info.tilt_image0_path],
+        help_text="First frame of the 0° tilted XPL + λ-plate movie.",
     )
 
     tilt45 = make_elevated_button(
@@ -48,6 +51,7 @@ def make_movie_selection_button_visible_state(
         0,
         3,
         [stores.computation_result.tilt_image_info.tilt_image45_path],
+        help_text="First frame of the 45° tilted XPL + λ-plate movie.",
     )
 
     # horiz0 = make_elevated_button(
@@ -66,6 +70,7 @@ def make_movie_selection_button_visible_state(
         0,
         5,
         [stores.computation_result.tilt_image_info.image45_path],
+        help_text="First frame of the horizontal 45° reference movie used for tilt alignment.",
     )
 
     # return xpl, full_wave, tilt0

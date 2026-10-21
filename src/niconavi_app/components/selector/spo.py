@@ -29,6 +29,7 @@ def make_spo_button_visible_state(
         # lambda: exist_in_segmented_maps(stores, "angle_deg")
         # and stores.ui.analysis_tab.plot_option.get() == "SPO",
         lambda: stores.ui.analysis_tab.plot_option.get() == "SPO",
+        help_text="Map of each grain's fitted-ellipse major-axis direction (0°–180°).",
     )
 
     # rose_cpo = make_elevated_button(
@@ -51,6 +52,7 @@ def make_spo_button_visible_state(
         [stores.computation_result.grain_list, stores.ui.analysis_tab.plot_option],
         # lambda: stores.computation_result.grain_list.get() is not None
         lambda: stores.ui.analysis_tab.plot_option.get() == "SPO",
+        help_text="Major-axis line of the fitted ellipse for each displayed grain.",
     )
 
     major_axis = make_elevated_button(
@@ -63,6 +65,7 @@ def make_spo_button_visible_state(
         # lambda: stores.computation_result.grain_list.get() is not None
         # and stores.ui.analysis_tab.plot_option.get() == "SPO",
         lambda: stores.ui.analysis_tab.plot_option.get() == "SPO",
+        help_text="Fitted ellipse outline for each displayed grain.",
     )
 
     return (

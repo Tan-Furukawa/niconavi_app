@@ -33,6 +33,7 @@ from niconavi_app.components.common_component import (
     describe_downstream_reset,
     MAP_TAB_STAGE,
 )
+from niconavi_app.components.context_help import suppress_context_help
 from niconavi_app.tools.tools import convert_RGBPicture_to_src_base64, switch_tab_index
 from niconavi_app.components.log_view import update_logs
 from niconavi_app.components.page_tab.tabs.reset_onclick import (
@@ -724,6 +725,7 @@ class GrainTab(ft.Container):
             icon_color=ft.Colors.BLUE_100,
             tooltip="Advanced settings",
         )
+        suppress_context_help(advanced_toggle_icon)
 
         def toggle_advanced_settings(_e: ft.ControlEvent) -> None:
             advanced_settings.visible = not advanced_settings.visible

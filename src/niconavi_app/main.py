@@ -26,6 +26,7 @@ from niconavi_app.components.image_view import ImageView
 from niconavi_app.components.image_selector import ImageSelector
 from niconavi_app.components.progress_bar import ProgressBar
 from niconavi_app.components.color_bar import ColorChartBar
+from niconavi_app.components.context_help import attach_context_help
 from niconavi_app.reactive_state import ReactiveColumn
 
 import flet as ft
@@ -217,6 +218,9 @@ def main(page: ft.Page) -> None:
         margin=0,
         width=stores.appearance.tabs_width,
     )
+
+    attach_context_help(image_selector, area="images")
+    attach_context_help(container2, area="controls")
 
     def resize_side_panel(event: ft.DragUpdateEvent) -> None:
         current_width = float(container2.width or stores.appearance.tabs_width)
