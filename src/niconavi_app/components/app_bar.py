@@ -50,6 +50,7 @@ from niconavi_app.components.common_component import (
     CustomReactiveCheckbox,
     make_confirmation_dialog,
 )
+from niconavi_app.components.context_help import ContextHelpController
 from niconavi_app.components.log_view import update_logs
 from niconavi_app.download_manager import register_download
 from niconavi_app.project_io import load_project_archive
@@ -478,7 +479,12 @@ def onlick_apply_mask_button(
 
 class niconaviAppBar:
     def __init__(
-        self, page: Page, stores: Stores, *, attach_to_page: bool = True
+        self,
+        page: Page,
+        stores: Stores,
+        *,
+        attach_to_page: bool = True,
+        help_controller: ContextHelpController | None = None,
     ) -> None:
 
         logger = getLogger("niconavi").getChild(__name__)
@@ -654,6 +660,13 @@ class niconaviAppBar:
                 margin=margin.only(left=10, right=15),
             )
 
+        def build_end_controls() -> list[ft.Control]:
+            controls: list[ft.Control] = []
+            if help_controller is not None:
+                controls.append(help_controller.create_button())
+            controls.append(build_menu_control())
+            return controls
+
         self.appbar = None
         if attach_to_page:
             self.appbar = AppBar(
@@ -665,7 +678,7 @@ class niconaviAppBar:
                 center_title=True,
                 toolbar_height=50,
                 bgcolor="#ff333333",
-                actions=[*build_toolbar_controls(), build_menu_control()],
+                actions=[*build_toolbar_controls(), *build_end_controls()],
             )
             self.page.appbar = self.appbar
             self.page.update()
@@ -680,7 +693,7 @@ class niconaviAppBar:
                         expand=True,
                     ),
                     ft.VerticalDivider(),
-                    build_menu_control(),
+                    *build_end_controls(),
                 ],
                 spacing=0,
             ),

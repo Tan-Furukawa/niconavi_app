@@ -11,13 +11,19 @@ from niconavi_app.tools.tools import switch_tab_index
 from niconavi_app.components.page_tab.tabs.filter_tab import FilterTab
 from niconavi_app.components.page_tab.tabs.merge_component import MergeTab
 from niconavi_app.app_config import ENABLE_FUNCTION_TAB
+from niconavi_app.components.context_help import ContextHelpController, TAB_HELP
 
 import flet as ft
 from logging import Logger, getLogger
 
 
 class PageTabs(ft.Container):
-    def __init__(self, page: ft.Page, stores: Stores):
+    def __init__(
+        self,
+        page: ft.Page,
+        stores: Stores,
+        help_controller: ContextHelpController | None = None,
+    ):
         super().__init__()
 
         logger = getLogger("niconavi").getChild(__name__)
@@ -31,12 +37,25 @@ class PageTabs(ft.Container):
         # self.height = page.window.height - stores.appearance.log_area_height
         self.tab_selected_index = stores.ui.selected_index
 
+        def tab_label(text: str, index: int) -> ft.Control | None:
+            if help_controller is None:
+                return None
+            label = ft.Container(
+                content=ft.Text(text),
+                on_click=lambda _: help_controller.show_text(TAB_HELP[index]),
+            )
+            # This handler already knows which tab was clicked. The generic
+            # tree interceptor must leave it intact while help mode is active.
+            setattr(label, "_context_help_excluded", True)
+            return label
+
         self.expand = True
         function_tabs = []
         if ENABLE_FUNCTION_TAB:
             function_tabs.append(
                 ReactiveTab(
-                    text="Function",
+                    text=None if help_controller is not None else "Function",
+                    tab_content=tab_label("Function", 5),
                     content=FunctionTab(page, stores),
                 )
             )
@@ -55,11 +74,13 @@ class PageTabs(ft.Container):
                     unselected_label_color=ft.Colors.WHITE,
                     tabs=[
                         ReactiveTab(
-                            text="Video",
+                            text=None if help_controller is not None else "Video",
+                            tab_content=tab_label("Video", 0),
                             content=MovieTab(page, stores),
                         ),
                         ReactiveTab(
-                            text="Center",
+                            text=None if help_controller is not None else "Center",
+                            tab_content=tab_label("Center", 1),
                             # tab_content=ft.Icon(ft.Icons.SEARCH),
                             content=CenterTab(page, stores),
                             # icon=ft.Icons.ADJUST,
@@ -69,7 +90,8 @@ class PageTabs(ft.Container):
                             ),
                         ),
                         ReactiveTab(
-                            text="Map",
+                            text=None if help_controller is not None else "Map",
+                            tab_content=tab_label("Map", 2),
                             content=GrainTab(page, stores),
                             visible=ReactiveState(
                                 lambda: stores.ui.progress.get() >= 2,
@@ -87,7 +109,8 @@ class PageTabs(ft.Container):
                         #     # icon=ft.Icons.SETTINGS,
                         # ),
                         ReactiveTab(
-                            text="Filter",
+                            text=None if help_controller is not None else "Filter",
+                            tab_content=tab_label("Filter", 3),
                             content=FilterTab(page, stores),
                             visible=ReactiveState(
                                 lambda: stores.ui.progress.get() >= 3,
@@ -105,7 +128,8 @@ class PageTabs(ft.Container):
                             # ),
                         ),
                         ReactiveTab(
-                            text="Analysis",
+                            text=None if help_controller is not None else "Analysis",
+                            tab_content=tab_label("Analysis", 4),
                             content=AnalysisTab(page, stores),
                             visible=ReactiveState(
                                 lambda: stores.ui.progress.get() >= 4,
