@@ -1,5 +1,8 @@
+from typing import List, Optional
+
 import numpy as np
-from typing import Optional, List
+from scipy.sparse import csr_matrix
+from sklearn.neighbors import kneighbors_graph
 from sklearn.preprocessing import RobustScaler, StandardScaler
 from sklearn.semi_supervised import LabelPropagation
 
@@ -7,6 +10,10 @@ from sklearn.semi_supervised import LabelPropagation
 class InteractiveLabelPropagation:
     """
     対話的ラベル付け + LabelPropagation による類似拡張。
+
+    有効な試料粒子だけで特徴量のk近傍グラフを作り、ユーザーが付けた
+    ラベルを固定したまま未ラベル粒子へ伝播する。
+
     - 背景/その他のクラス = 0（予測の既定値）
     - 学習用の未ラベルは -1
     - 伝播後、確信度が低い点は 0 へ落とす（reject_threshold）
@@ -20,7 +27,6 @@ class InteractiveLabelPropagation:
         use_robust_scaler: bool = True,
         reject_threshold: float = 0.55,  # 最大クラス確率がこれ未満なら class 0
         position_weight: float = 0.2,
-        prototype_weight: float = 0.85,
         scale_features: bool = True,
     ):
         self.n_neighbors = n_neighbors
@@ -29,13 +35,13 @@ class InteractiveLabelPropagation:
         self.use_robust_scaler = use_robust_scaler
         self.reject_threshold = reject_threshold
         self.position_weight = position_weight
-        self.prototype_weight = prototype_weight
         self.scale_features = scale_features
 
         self.X_: Optional[np.ndarray] = None  # (N, d) 生特徴
         self.feature_weights_: Optional[np.ndarray] = None
         self.scaler_ = None
         self.Z_: Optional[np.ndarray] = None  # (N, d) スケール後
+        self.valid_mask_: Optional[np.ndarray] = None  # (N,) 実在する粒子
         self.y_user_: Optional[np.ndarray] = None  # (N,) 学習用。未ラベルは -1
         self.lp_: Optional[LabelPropagation] = None
 
@@ -49,13 +55,23 @@ class InteractiveLabelPropagation:
         self,
         X: np.ndarray,
         feature_weights: Optional[np.ndarray] = None,
+        valid_mask: Optional[np.ndarray] = None,
     ) -> None:
         """
         X: (N, d) feature matrix (for example: elongation, size, Lab, position)
+        valid_mask: (N,) mask for rows that correspond to actual grains
         """
         if X.ndim != 2:
             raise ValueError("X must be 2D array.")
         self.X_ = X.astype(np.float64, copy=True)
+        N = self.X_.shape[0]
+        if valid_mask is None:
+            self.valid_mask_ = np.ones(N, dtype=bool)
+        else:
+            mask = np.asarray(valid_mask, dtype=bool)
+            if mask.ndim != 1 or mask.size != N:
+                raise ValueError("valid_mask must match the feature rows.")
+            self.valid_mask_ = mask.copy()
         if feature_weights is None:
             weights = np.ones(X.shape[1], dtype=np.float64)
             if weights.size >= 9:
@@ -72,15 +88,15 @@ class InteractiveLabelPropagation:
                 weights[-2:] = float(self.position_weight)
         self.feature_weights_ = weights.copy()
         weighted_x = self.X_[:, selected]
-        if self.scale_features:
+        if self.scale_features and np.any(self.valid_mask_):
             Scaler = RobustScaler if self.use_robust_scaler else StandardScaler
-            self.scaler_ = Scaler().fit(weighted_x)
-            self.Z_ = self.scaler_.transform(weighted_x)
+            scaler = Scaler().fit(weighted_x[self.valid_mask_])
+            self.scaler_ = scaler
+            self.Z_ = scaler.transform(weighted_x)
         else:
             self.scaler_ = None
             self.Z_ = weighted_x.copy()
         self.Z_ *= weights[selected]
-        N = self.Z_.shape[0]
         # 最初はすべて未ラベル（-1）。推論の既定値は後段で 0 とする
         self.y_user_ = np.full(N, -1, dtype=int)
         self.classes_in_use_ = []
@@ -96,8 +112,12 @@ class InteractiveLabelPropagation:
         ユーザーが「index idx を class_id に」指定。class_id=None なら新クラス払い出し。
         Returns: 確定した class_id
         """
-        if self.Z_ is None:
+        if self.Z_ is None or self.valid_mask_ is None or self.y_user_ is None:
             raise RuntimeError("Call fit_features(X) first.")
+        if idx < 0 or idx >= self.Z_.shape[0]:
+            raise IndexError("label index is outside the feature rows.")
+        if not self.valid_mask_[idx]:
+            raise ValueError("cannot label a row that does not represent a grain.")
         if class_id is None or class_id < 0:
             # 0 は背景用に予約。既存最大 + 1 を払い出し
             next_class = (max(self.classes_in_use_) + 1) if self.classes_in_use_ else 1
@@ -125,10 +145,10 @@ class InteractiveLabelPropagation:
         現在のユーザーラベル y_user_（-1: 未ラベル）で LabelPropagation を実行し、
         低確信を class 0 へ落として y_pred_ を更新。
         """
-        if self.Z_ is None or self.y_user_ is None:
+        if self.Z_ is None or self.y_user_ is None or self.valid_mask_ is None:
             raise RuntimeError("No features/labels. Call fit_features and set_label.")
 
-        labeled_mask = self.y_user_ > 0
+        labeled_mask = (self.y_user_ > 0) & self.valid_mask_
         if labeled_mask.sum() == 0:
             self.y_pred_ = np.zeros_like(self.y_user_, dtype=int)
             self.y_proba_ = None
@@ -136,108 +156,89 @@ class InteractiveLabelPropagation:
             self.lp_ = None
             return
 
-        prototype_proba, classes = self._prototype_probabilities(labeled_mask)
-        graph_proba = (
-            None
-            if self.prototype_weight >= 1.0
-            else self._label_propagation_probabilities(classes)
-        )
-        if graph_proba is None:
-            proba = prototype_proba
-        else:
-            alpha = float(np.clip(self.prototype_weight, 0.0, 1.0))
-            proba = alpha * prototype_proba + (1.0 - alpha) * graph_proba
-            proba = self._normalize_rows(proba)
+        classes = np.array(sorted(set(self.y_user_[labeled_mask].tolist())), dtype=int)
+        proba = self._label_propagation_probabilities(classes)
 
-        argmax_idx = proba.argmax(axis=1)
-        max_prob = proba[np.arange(proba.shape[0]), argmax_idx]
-        y_pred = classes[argmax_idx]
-        y_pred[max_prob < self.reject_threshold] = 0
-        y_pred[self.y_user_ > 0] = self.y_user_[self.y_user_ > 0]
+        y_pred = np.zeros_like(self.y_user_, dtype=int)
+        propagated_mask = self.valid_mask_ & (proba.sum(axis=1) > 0)
+        if np.any(propagated_mask):
+            rows = np.flatnonzero(propagated_mask)
+            argmax_idx = proba[rows].argmax(axis=1)
+            max_prob = proba[rows, argmax_idx]
+            accepted = max_prob >= self.reject_threshold
+            y_pred[rows[accepted]] = classes[argmax_idx[accepted]]
+        y_pred[labeled_mask] = self.y_user_[labeled_mask]
 
         self.y_pred_ = y_pred.astype(int)
         self.y_proba_ = proba
         self.proba_classes_ = classes
 
-    def _prototype_probabilities(
-        self,
-        labeled_mask: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        if self.Z_ is None or self.y_user_ is None:
-            raise RuntimeError("No features/labels. Call fit_features and set_label.")
-
-        classes = np.array(sorted(set(self.y_user_[labeled_mask].tolist())), dtype=int)
-        labeled_indices = np.flatnonzero(labeled_mask)
-        labeled_z = self.Z_[labeled_indices]
-        diff = self.Z_[:, None, :] - labeled_z[None, :, :]
-        dist2 = np.sum(diff * diff, axis=2)
-        min_dist = np.sqrt(np.min(dist2, axis=1))
-        positive_dist = min_dist[min_dist > 0]
-        if positive_dist.size:
-            sigma = float(np.median(positive_dist))
-        else:
-            sigma = 1.0
-        sigma = max(sigma, 1e-6)
-
-        weights = np.exp(-0.5 * dist2 / (sigma * sigma))
-        scores = np.zeros((self.Z_.shape[0], classes.size), dtype=np.float64)
-        for col, class_id in enumerate(classes):
-            class_cols = self.y_user_[labeled_indices] == class_id
-            if not np.any(class_cols):
-                continue
-            class_weights = weights[:, class_cols]
-            scores[:, col] = np.max(class_weights, axis=1)
-
-        for row, class_id in zip(labeled_indices, self.y_user_[labeled_indices]):
-            class_pos = np.flatnonzero(classes == class_id)
-            if class_pos.size:
-                scores[row, :] = 0.0
-                scores[row, class_pos[0]] = 1.0
-
-        return self._normalize_rows(scores), classes
-
     def _label_propagation_probabilities(
         self,
         classes: np.ndarray,
-    ) -> Optional[np.ndarray]:
-        if self.Z_ is None or self.y_user_ is None:
-            return None
-        if classes.size == 0:
-            return None
+    ) -> np.ndarray:
+        if self.Z_ is None or self.y_user_ is None or self.valid_mask_ is None:
+            raise RuntimeError("No features/labels. Call fit_features and set_label.")
 
-        kwargs = dict(kernel=self.kernel, max_iter=1000)
+        valid_indices = np.flatnonzero(self.valid_mask_)
+        out = np.zeros((self.Z_.shape[0], classes.size), dtype=np.float64)
+        if classes.size == 0 or valid_indices.size == 0:
+            return out
+
         if self.kernel == "knn":
-            N = self.Z_.shape[0]
-            nnb = max(1, min(self.n_neighbors, N - 1))
-            kwargs["n_neighbors"] = nnb
-        else:
-            kwargs["gamma"] = float(self.gamma)
+            nnb = max(1, min(self.n_neighbors, valid_indices.size))
 
-        self.lp_ = LabelPropagation(**kwargs)
-        try:
-            self.lp_.fit(self.Z_, self.y_user_)
-        except Exception:
-            self.lp_ = None
-            return None
+            def symmetric_knn_kernel(x: np.ndarray, _y: np.ndarray):
+                connectivity = kneighbors_graph(
+                    x,
+                    n_neighbors=nnb,
+                    mode="connectivity",
+                    include_self=True,
+                )
+                # sklearn's built-in kNN kernel is directed.  A symmetric
+                # affinity lets a label propagate naturally in either
+                # direction along a neighborhood connection.
+                connectivity = connectivity.maximum(connectivity.T).tocoo()
+                delta = x[connectivity.row] - x[connectivity.col]
+                distances = np.sqrt(np.sum(delta * delta, axis=1))
+                positive_distances = distances[distances > 0]
+                bandwidth = (
+                    float(np.median(positive_distances))
+                    if positive_distances.size
+                    else 1.0
+                )
+                bandwidth = max(bandwidth, float(np.finfo(np.float64).eps))
+                affinities = np.exp(-0.5 * (distances / bandwidth) ** 2)
+                return csr_matrix(
+                    (affinities, (connectivity.row, connectivity.col)),
+                    shape=connectivity.shape,
+                )
+
+            self.lp_ = LabelPropagation(
+                kernel=symmetric_knn_kernel,
+                max_iter=1000,
+            )
+        elif self.kernel == "rbf":
+            self.lp_ = LabelPropagation(
+                kernel="rbf",
+                gamma=float(self.gamma),
+                max_iter=1000,
+            )
+        else:
+            raise ValueError(f"unsupported LabelPropagation kernel: {self.kernel!r}")
+
+        self.lp_.fit(self.Z_[valid_indices], self.y_user_[valid_indices])
 
         lp_classes = np.asarray(self.lp_.classes_, dtype=int)
         lp_proba = np.asarray(self.lp_.label_distributions_, dtype=np.float64)
-        out = np.zeros((self.Z_.shape[0], classes.size), dtype=np.float64)
         for col, class_id in enumerate(classes):
             match = np.flatnonzero(lp_classes == class_id)
             if match.size:
-                out[:, col] = lp_proba[:, match[0]]
-        return self._normalize_rows(out)
+                out[valid_indices, col] = lp_proba[:, match[0]]
 
-    @staticmethod
-    def _normalize_rows(scores: np.ndarray) -> np.ndarray:
-        scores = np.asarray(scores, dtype=np.float64)
-        totals = scores.sum(axis=1, keepdims=True)
-        empty = totals[:, 0] <= 0
-        totals[empty, 0] = 1.0
-        out = scores / totals
-        if np.any(empty) and out.shape[1] > 0:
-            out[empty, :] = 1.0 / out.shape[1]
+        totals = out.sum(axis=1, keepdims=True)
+        nonempty = totals[:, 0] > 0
+        out[nonempty] /= totals[nonempty]
         return out
 
     # -------------------- 出力 --------------------
@@ -256,6 +257,8 @@ class InteractiveLabelPropagation:
 
     def labeled_mask(self) -> np.ndarray:
         """ユーザーが明示ラベルを付けた位置（-1 以外）。"""
+        if self.y_user_ is None:
+            raise RuntimeError("Call fit_features(X) first.")
         return self.y_user_ != -1
 
     def classes_in_use(self) -> List[int]:

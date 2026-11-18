@@ -1,6 +1,8 @@
+from types import SimpleNamespace
+
 import cv2
 import numpy as np
-from types import SimpleNamespace
+import pytest
 
 from niconavi_app.components.labeling_app.label_propagation import (
     InteractiveLabelPropagation,
@@ -88,10 +90,13 @@ def test_color_features_learn_dark_and_bright_grains() -> None:
         n_neighbors=3,
         kernel="knn",
         reject_threshold=0.0,
-        prototype_weight=1.0,
         scale_features=False,
     )
-    classifier.fit_features(features, feature_weights=weights)
+    classifier.fit_features(
+        features,
+        feature_weights=weights,
+        valid_mask=LabelingController._valid_grain_mask(index_map, features.shape[0]),
+    )
     classifier.set_label(1, class_id=1)
     classifier.set_label(2, class_id=1)
     classifier.set_label(7, class_id=2)
@@ -140,15 +145,73 @@ def test_size_feature_uses_logarithmic_component_area() -> None:
         n_neighbors=3,
         kernel="knn",
         reject_threshold=0.0,
-        prototype_weight=1.0,
         scale_features=False,
     )
-    classifier.fit_features(features, feature_weights=weights)
+    classifier.fit_features(
+        features,
+        feature_weights=weights,
+        valid_mask=LabelingController._valid_grain_mask(index_map, features.shape[0]),
+    )
     classifier.set_label(1, class_id=1)
     classifier.set_label(4, class_id=2)
     classifier.propagate()
 
     assert classifier.current_predictions()[1:5].tolist() == [1, 1, 2, 2]
+
+
+def test_label_propagation_uses_only_rows_for_existing_grains() -> None:
+    features = np.array(
+        [[5.0], [0.0], [0.1], [0.2], [5.1], [5.2], [10.0], [10.1], [10.2]],
+        dtype=np.float64,
+    )
+    valid_mask = np.array(
+        [False, True, True, True, False, False, True, True, True],
+        dtype=bool,
+    )
+    classifier = InteractiveLabelPropagation(
+        n_neighbors=2,
+        kernel="knn",
+        reject_threshold=0.0,
+        scale_features=False,
+    )
+    classifier.fit_features(features, valid_mask=valid_mask)
+    classifier.set_label(1, class_id=1)
+    classifier.set_label(8, class_id=2)
+    classifier.propagate()
+
+    assert classifier.lp_ is not None
+    assert classifier.current_predictions().tolist() == [0, 1, 1, 1, 0, 0, 2, 2, 2]
+    assert np.all(classifier.current_probabilities()[~valid_mask] == 0)
+
+    with pytest.raises(ValueError, match="does not represent a grain"):
+        classifier.set_label(4, class_id=1)
+
+
+def test_unlabeled_disconnected_graph_component_stays_unclassified() -> None:
+    features = np.array(
+        [[0.0], [0.1], [0.2], [10.0], [10.1], [10.2]], dtype=np.float64
+    )
+    classifier = InteractiveLabelPropagation(
+        n_neighbors=2,
+        kernel="knn",
+        reject_threshold=0.0,
+        scale_features=False,
+    )
+    classifier.fit_features(features)
+    classifier.set_label(0, class_id=1)
+    classifier.propagate()
+
+    assert classifier.current_predictions().tolist() == [1, 1, 1, 0, 0, 0]
+    assert np.all(classifier.current_probabilities()[3:] == 0)
+
+
+def test_display_predictions_preserve_unclassified_grains() -> None:
+    stores = Stores()
+    controller = LabelingController(stores)
+    predictions = np.array([0, 1, 0, 2], dtype=np.int32)
+    controller.labeling_map.predictions.set(predictions)
+
+    assert np.array_equal(controller._compute_display_predictions(), predictions)
 
 
 def test_image_tap_waits_for_confirmation_when_analysis_exists(monkeypatch) -> None:

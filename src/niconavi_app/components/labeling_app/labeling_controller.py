@@ -399,31 +399,14 @@ class LabelingController:
 
         predictions = np.asarray(predictions).astype(np.int32, copy=True)
 
-        if self.clf is not None and np.any(predictions == 0):
+        if self.clf is not None:
             self.clf.propagate()
             refreshed = self.clf.current_predictions()
             if refreshed is not None:
                 predictions = np.asarray(refreshed).astype(np.int32, copy=True)
-            if np.any(predictions == 0):
-                probabilities = self.clf.current_probabilities()
-                classes = self.clf.probability_classes()
-                if probabilities is not None and classes is not None:
-                    classes = np.asarray(classes)
-                    nonzero_mask = classes != 0
-                    if np.any(nonzero_mask):
-                        nonzero_classes = classes[nonzero_mask]
-                        nonzero_probs = probabilities[:, nonzero_mask]
-                        if nonzero_probs.size != 0:
-                            best_idx = nonzero_probs.argmax(axis=1)
-                            fill_mask = predictions == 0
-                            if np.any(fill_mask):
-                                predictions[fill_mask] = nonzero_classes[best_idx[fill_mask]]
 
-        if np.any(predictions == 0):
-            nonzero_vals = predictions[predictions != 0]
-            if nonzero_vals.size:
-                fallback = np.bincount(nonzero_vals).argmax()
-                predictions[predictions == 0] = fallback
+        # Class 0 is meaningful: no user label can reach this grain through
+        # the similarity graph.  Do not replace it with an arbitrary class.
 
         # Feature row 0 is a dummy for the background/boundary ID and must not
         # become part of a user classification.
@@ -588,7 +571,11 @@ class LabelingController:
         self.clf = self._make_classifier()
         if features is None:
             raise RuntimeError("features failed to load")
-        self.clf.fit_features(features, feature_weights=self._feature_weights(features))
+        self.clf.fit_features(
+            features,
+            feature_weights=self._feature_weights(features),
+            valid_mask=self._valid_grain_mask(index_map, features.shape[0]),
+        )
         for idx, cls in INITIAL_LABELS.items():
             self.clf.set_label(idx, class_id=cls)
         self.clf.propagate()
@@ -635,9 +622,17 @@ class LabelingController:
             n_neighbors=5,
             kernel="knn",
             reject_threshold=0.0,
-            prototype_weight=1.0,
             scale_features=False,
         )
+
+    @staticmethod
+    def _valid_grain_mask(index_map: np.ndarray, feature_count: int) -> np.ndarray:
+        """Return feature rows backed by an actual, non-background grain."""
+        mask = np.zeros(feature_count, dtype=bool)
+        grain_ids = np.unique(np.asarray(index_map, dtype=np.int64))
+        grain_ids = grain_ids[(grain_ids > 0) & (grain_ids < feature_count)]
+        mask[grain_ids] = True
+        return mask
 
     def _feature_weights(self, features: np.ndarray) -> np.ndarray:
         if features.shape[1] != len(COMPONENT_FEATURE_KEYS):
@@ -664,17 +659,25 @@ class LabelingController:
 
     def rebuild_classifier_from_current_features(self) -> None:
         features = self.labeling_map.features.get()
-        if features is None:
+        index_map = self.labeling_map.index_map.get()
+        if features is None or index_map is None:
             return
         old_clf = self.clf
         new_clf = self._make_classifier()
-        new_clf.fit_features(features, feature_weights=self._feature_weights(features))
-        if old_clf is not None and old_clf.y_user_ is not None:
-            copy_len = min(old_clf.y_user_.size, new_clf.y_user_.size)
-            new_clf.y_user_[:copy_len] = old_clf.y_user_[:copy_len]
+        new_clf.fit_features(
+            features,
+            feature_weights=self._feature_weights(features),
+            valid_mask=self._valid_grain_mask(index_map, features.shape[0]),
+        )
+        new_y_user = new_clf.y_user_
+        if old_clf is not None and old_clf.y_user_ is not None and new_y_user is not None:
+            copy_len = min(old_clf.y_user_.size, new_y_user.size)
+            new_y_user[:copy_len] = old_clf.y_user_[:copy_len]
+            if new_clf.valid_mask_ is not None:
+                new_y_user[~new_clf.valid_mask_] = -1
             new_clf.classes_in_use_ = sorted(
                 int(class_id)
-                for class_id in np.unique(new_clf.y_user_[new_clf.y_user_ > 0])
+                for class_id in np.unique(new_y_user[new_y_user > 0])
             )
         self.clf = new_clf
         self.clf.propagate()
@@ -836,29 +839,10 @@ class LabelingController:
         predictions = self.labeling_map.predictions.get()
         if predictions is None:
             return np.array([], dtype=int)
-        if self.clf is None:
-            return predictions
-        if not self.labeling.user_clicked.get():
-            return predictions
-        probabilities = self.labeling_map.probabilities.get()
-        # print("---------")
-        # print("probabilities")
-        # print(probabilities)
-        # print("---------")
-        if probabilities is None:
-            return predictions
-        classes = self.clf.probability_classes()
-        if classes is None:
-            return predictions
-        nonzero_mask = classes != 0
-        if not np.any(nonzero_mask):
-            return predictions
-        nonzero_classes = classes[nonzero_mask]
-        nonzero_probs = probabilities[:, nonzero_mask]
-        if nonzero_probs.size == 0:
-            return predictions
-        best_idx = nonzero_probs.argmax(axis=1)
-        return nonzero_classes[best_idx]
+        # The classifier already applies confidence rejection and leaves graph
+        # components with no labeled path as 0.  Recomputing argmax here would
+        # incorrectly turn an all-zero distribution into the first class.
+        return predictions
 
     def _clear_class_assignments(self, class_id: int) -> None:
         if self.clf is None or class_id == 0:
