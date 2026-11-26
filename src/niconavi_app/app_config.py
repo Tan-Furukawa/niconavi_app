@@ -23,9 +23,52 @@ R_COLOR_MAP_SOURCE: RColorMapSource = "extinction_color_map"
 # thickness; without one that path falls back to the chart regardless.
 ADDITION_BRANCH_SOURCE: AdditionBranchSource = "theta_lut"
 
+# Show or hide the "Function" tab (the last tab, after Analysis).
+#
+# What it is: a page of optional helper tools that are separate from the main
+# Video -> Center -> Map -> Filter -> Analysis workflow, e.g. converting
+# between specimen thickness and maximum retardation and previewing the
+# resulting interference color / spectral distribution.
+#
+# True  -> the Function tab is added to the tab bar.
+# False -> the tab is not created at all; the main workflow is unaffected.
+# The switch is read in components/page_tab/page_tab.py; the tab itself is
+# components/page_tab/tabs/function_tab.py.
 ENABLE_FUNCTION_TAB = False
 
+# Brightness matching of the tilted image to its reference (untilted) image.
+#
+# What it is: before the tilted and untilted frames are compared for the
+# inclination estimate, each frame's brightness (HSV V channel) can be shifted
+# or scaled so that their medians inside the field of view agree. This
+# compensates for an overall brightness change between the two exposures
+# (lamp, exposure time, stage tilt) so that only the color change from tilting
+# remains.
+#
+# True  -> the median brightness correction is applied.
+# False -> the images are used as recorded, without brightness adjustment.
+# The switch is read in niconavi/inclination.py
+# (normalize_tilt_pair_brightness) and niconavi/tilt_image.py
+# (normalize_by_gray_scale).
 ENABLE_TILT_REF_MEDIAN_CORRECTION = False
+
+# Show or hide the "color check" section of the images panel.
+#
+# What it is: after "calculate" on the analysis tab with the CPO plot
+# selected, the images panel can offer two buttons under a "color check"
+# heading:
+#   - "RGB before correction": scatter plot of the predicted vs. observed
+#     grain-centre RGB values, before the color correction is applied.
+#   - "RGB after correction":  the same comparison after the color correction.
+# Points close to the 1:1 line mean the color model reproduces the observed
+# colors well; it is a diagnostic for checking the correction, not a result.
+#
+# True  -> the two scatter plots are built on calculate and the buttons appear.
+# False -> the plots are not built at all (saves that computation), so the
+#          buttons and the "color check" heading stay hidden. Nothing else in
+#          the CPO result changes.
+# The switch is read in components/page_tab/tabs/analysis_tab.py.
+ENABLE_RGB_COLOR_CHECK = False
 
 # CPO "90 deg normalize": the STARTING percentile of the selected grains'
 # inclination that is rescaled to 90 deg (a robust stand-in for "the most

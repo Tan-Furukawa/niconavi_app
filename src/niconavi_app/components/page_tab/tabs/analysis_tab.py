@@ -6,6 +6,7 @@ from niconavi_app.stores import (
     HISTOGRAM_STATS_DEFAULT,
     ROSE_STATS_DEFAULT,
 )
+from niconavi_app.app_config import ENABLE_RGB_COLOR_CHECK
 from niconavi_app.reactive_state import (
     ReactiveRow,
     ReactiveColumn,
@@ -122,9 +123,10 @@ def onclick_cip_start_button(
         stores.ui.analysis_tab.cip_stats_text.set(info_text)
 
         # Build the RGB regression figures and expose them as the "color check"
-        # buttons, one image each (shown while CPO is selected).
+        # buttons, one image each (shown while CPO is selected). Disabled via
+        # app_config.ENABLE_RGB_COLOR_CHECK: no figures, so no buttons.
         before_figure = after_figure = None
-        if orientation is not None:
+        if ENABLE_RGB_COLOR_CHECK and orientation is not None:
             before_figure = make_cpo_regression_figure(orientation, corrected=False)
             after_figure = make_cpo_regression_figure(orientation, corrected=True)
         stores.ui.analysis_tab.cip_regression_before_figure.set(before_figure)
